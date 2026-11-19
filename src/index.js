@@ -9,16 +9,22 @@ const SYSTEM='You are Lumira, a playful, witty, slightly chaotic but considerate
 async function replyTo(text){
   const key=process.env.GEMINI_API_KEY;
   if(!key) return 'Present and accounted for. ✨ My Gemini brain is waiting for its API key, but I heard you.';
-  const model=process.env.GEMINI_MODEL||'gemini-2.5-flash';
+  const preferredModel=process.env.GEMINI_MODEL||'gemini-2.5-flash';
   const controller=new AbortController();
   const timeout=setTimeout(()=>controller.abort(),20000);
   try {
+    const listRes=await fetch('https://generativelanguage.googleapis.com/v1beta/models?pageSize=100',{headers:{'x-goog-api-key':key},signal:controller.signal});
+    if(!listRes.ok){console.error('Gemini model discovery failed with HTTP',listRes.status);throw new Error('Gemini API key or model access problem')}
+    const catalog=await listRes.json();
+    const models=(catalog.models||[]).filter(m=>m.supportedGenerationMethods?.includes('generateContent')).map(m=>m.name.replace(/^models\\//,''));
+    const model=[preferredModel,'gemini-2.5-flash','gemini-2.5-flash-lite','gemini-2.0-flash'].find(m=>models.includes(m));
+    if(!model){console.error('No supported Gemini text model available; available models:',models.slice(0,12));throw new Error('No supported Gemini model')}
     const res=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+encodeURIComponent(model)+':generateContent',{
       method:'POST',signal:controller.signal,
       headers:{'x-goog-api-key':key,'Content-Type':'application/json'},
       body:JSON.stringify({systemInstruction:{parts:[{text:SYSTEM}]},contents:[{role:'user',parts:[{text:text.slice(0,1800)}]}],generationConfig:{maxOutputTokens:350,temperature:0.9}})
     });
-    if(!res.ok){console.error('Gemini request failed with status',res.status);throw new Error('Gemini unavailable')}
+    if(!res.ok){console.error('Gemini generation failed with HTTP',res.status,'using model',model);throw new Error('Gemini unavailable')}
     const data=await res.json();
     const answer=data.candidates?.[0]?.content?.parts?.filter(p=>typeof p.text==='string').map(p=>p.text).join('').trim();
     return (answer||'The cosmic gears are turning, but I have no words right now. ✨').slice(0,1800);
