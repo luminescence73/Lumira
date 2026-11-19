@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import { Client, GatewayIntentBits, Events, MessageFlags } from 'discord.js';
+import { Client, GatewayIntentBits, Events, MessageFlags, SlashCommandBuilder } from 'discord.js';
 const token=process.env.DISCORD_TOKEN;
 if(!token) throw new Error('DISCORD_TOKEN is required');
 const allowed=new Set((process.env.LUMIRA_CHANNEL_IDS||'').split(',').map(s=>s.trim()).filter(Boolean));
@@ -14,7 +14,20 @@ async function replyTo(text){
 }
 function permitted(channelId){return allowed.size===0||allowed.has(channelId)}
 function canRespond(userId){const now=Date.now();if(now-(cooldown.get(userId)||0)<12000)return false;cooldown.set(userId,now);return true}
-client.once(Events.ClientReady,c=>console.log('Lumira online as '+c.user.tag));
+client.once(Events.ClientReady,async c=>{
+ console.log('Lumira online as '+c.user.tag);
+ const command=new SlashCommandBuilder().setName('lumira').setDescription('Chat with Lumira').addStringOption(o=>o.setName('message').setDescription('What would you like to say?').setRequired(true)).toJSON();
+ try {
+   if(process.env.DISCORD_GUILD_ID){
+     const guild=await c.guilds.fetch(process.env.DISCORD_GUILD_ID);
+     await guild.commands.set([command]);
+     console.log('Registered /lumira in configured guild');
+   } else {
+     await c.application.commands.set([command]);
+     console.log('Registered /lumira globally (may take time to appear)');
+   }
+ }catch(error){console.error('Slash command registration failed:',error)}
+});
 client.on(Events.InteractionCreate,async interaction=>{
  if(!interaction.isChatInputCommand()||interaction.commandName!=='lumira')return;
  if(!permitted(interaction.channelId))return interaction.reply({content:'Lumira is not enabled in this channel.',flags:MessageFlags.Ephemeral});
