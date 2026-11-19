@@ -12,7 +12,7 @@ async function replyTo(text){
  const models=[...new Set([process.env.GEMINI_MODEL||'gemini-3.5-flash-lite','gemini-3.5-flash-lite','gemini-3.8-flash'])];
  for(const model of models){
   const controller=new AbortController();
-  const timeout=setTimeout(()=>controller.abort(),9000);
+  const timeout=setTimeout(()=>controller.abort(),22000);
   try{
    const res=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+encodeURIComponent(model)+':generateContent',{
     method:'POST',signal:controller.signal,headers:{'x-goog-api-key':key,'Content-Type':'application/json'},
