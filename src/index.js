@@ -17,14 +17,21 @@ async function replyTo(text){
     if(!listRes.ok){console.error('Gemini model discovery failed with HTTP',listRes.status);throw new Error('Gemini API key or model access problem')}
     const catalog=await listRes.json();
     const models=(catalog.models||[]).filter(m=>m.supportedGenerationMethods?.includes('generateContent')).map(m=>m.name.replace('models/',''));
-    const model=[preferredModel,'gemini-2.5-flash','gemini-2.5-flash-lite','gemini-2.0-flash'].find(m=>models.includes(m));
-    if(!model){console.error('No supported Gemini text model available; available models:',models.slice(0,12));throw new Error('No supported Gemini model')}
-    const res=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+encodeURIComponent(model)+':generateContent',{
-      method:'POST',signal:controller.signal,
-      headers:{'x-goog-api-key':key,'Content-Type':'application/json'},
-      body:JSON.stringify({systemInstruction:{parts:[{text:SYSTEM}]},contents:[{role:'user',parts:[{text:text.slice(0,1800)}]}],generationConfig:{maxOutputTokens:350,temperature:0.9}})
-    });
-    if(!res.ok){console.error('Gemini generation failed with HTTP',res.status,'using model',model);throw new Error('Gemini unavailable')}
+    const candidates=[...new Set([preferredModel,'gemini-2.5-flash-lite','gemini-2.0-flash',...models])].filter(m=>models.includes(m)).slice(0,8);
+    if(!candidates.length){console.error('No supported Gemini text models');throw new Error('No supported Gemini model')}
+    let res;
+    for(const model of candidates){
+      res=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+encodeURIComponent(model)+':generateContent',{
+        method:'POST',signal:controller.signal,
+        headers:{'x-goog-api-key':key,'Content-Type':'application/json'},
+        body:JSON.stringify({systemInstruction:{parts:[{text:SYSTEM}]},contents:[{role:'user',parts:[{text:text.slice(0,1800)}]}],generationConfig:{maxOutputTokens:350,temperature:0.9}})
+      });
+      if(res.ok)break;
+      const errorBody=await res.json().catch(()=>({}));
+      console.error('Gemini HTTP',res.status,'model',model,'reason',String(errorBody.error?.message||'unknown').slice(0,250));
+      if(res.status!==404)throw new Error('Gemini API error '+res.status);
+    }
+    if(!res?.ok)throw new Error('No Gemini model succeeded');
     const data=await res.json();
     const answer=data.candidates?.[0]?.content?.parts?.filter(p=>typeof p.text==='string').map(p=>p.text).join('').trim();
     return (answer||'The cosmic gears are turning, but I have no words right now. ✨').slice(0,1800);
