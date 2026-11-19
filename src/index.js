@@ -41,6 +41,7 @@ function permitted(channelId){return allowed.size===0||allowed.has(channelId)}
 function canRespond(userId){const now=Date.now();if(now-(cooldown.get(userId)||0)<12000)return false;cooldown.set(userId,now);return true}
 client.once(Events.ClientReady,async c=>{
  console.log('Lumira online as '+c.user.tag);
+ if(process.env.GEMINI_API_KEY){try{const answer=await replyTo('Reply with one short friendly greeting.');console.log('Gemini startup self-test succeeded; response length:',answer.length)}catch(error){console.error('Gemini startup self-test failed:',error.message)}}
  const command=new SlashCommandBuilder().setName('lumira').setDescription('Chat with Lumira').addStringOption(o=>o.setName('message').setDescription('What would you like to say?').setRequired(true)).toJSON();
  try {
    if(process.env.DISCORD_GUILD_ID){
