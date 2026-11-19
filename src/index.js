@@ -11,7 +11,7 @@ async function replyTo(text){
   if(!key) return 'Present and accounted for. ✨ My Gemini brain is waiting for its API key, but I heard you.';
   const preferredModel=process.env.GEMINI_MODEL||'gemini-3.8-flash';
   const controller=new AbortController();
-  const timeout=setTimeout(()=>controller.abort(),20000);
+  const timeout=setTimeout(()=>controller.abort(),45000);
   try {
     const listRes=await fetch('https://generativelanguage.googleapis.com/v1beta/models?pageSize=100',{headers:{'x-goog-api-key':key},signal:controller.signal});
     if(!listRes.ok){console.error('Gemini model discovery failed with HTTP',listRes.status);throw new Error('Gemini API key or model access problem')}
@@ -29,7 +29,7 @@ async function replyTo(text){
       if(res.ok)break;
       const errorBody=await res.json().catch(()=>({}));
       console.error('Gemini HTTP',res.status,'model',model,'reason',String(errorBody.error?.message||'unknown').slice(0,250));
-      if(res.status!==404 && res.status!==400)throw new Error('Gemini API error '+res.status);
+      if(![400,404,429,500,502,503,504].includes(res.status))throw new Error('Gemini API error '+res.status);
     }
     if(!res?.ok)throw new Error('No Gemini model succeeded');
     const data=await res.json();
