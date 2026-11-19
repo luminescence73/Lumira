@@ -22,4 +22,5 @@ client.on(Events.InteractionCreate,async interaction=>{
  await interaction.deferReply();
  try{await interaction.editReply({content:await replyTo(interaction.options.getString('message')),allowedMentions:{parse:[]}})}catch(e){console.error(e);await interaction.editReply('I tripped over a cable. Try again in a moment. 💙')}
 });
-// Mention replies are disabled until the Message Content intent is authorized.\nawait client.login(token);
+// Mention replies are disabled until the Message Content intent is authorized.
+await client.login(token);
