@@ -16,7 +16,7 @@ async function replyTo(text){
     const listRes=await fetch('https://generativelanguage.googleapis.com/v1beta/models?pageSize=100',{headers:{'x-goog-api-key':key},signal:controller.signal});
     if(!listRes.ok){console.error('Gemini model discovery failed with HTTP',listRes.status);throw new Error('Gemini API key or model access problem')}
     const catalog=await listRes.json();
-    const models=(catalog.models||[]).filter(m=>m.supportedGenerationMethods?.includes('generateContent')).map(m=>m.name.replace(/^models\\//,''));
+    const models=(catalog.models||[]).filter(m=>m.supportedGenerationMethods?.includes('generateContent')).map(m=>m.name.replace('models/',''));
     const model=[preferredModel,'gemini-2.5-flash','gemini-2.5-flash-lite','gemini-2.0-flash'].find(m=>models.includes(m));
     if(!model){console.error('No supported Gemini text model available; available models:',models.slice(0,12));throw new Error('No supported Gemini model')}
     const res=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+encodeURIComponent(model)+':generateContent',{
