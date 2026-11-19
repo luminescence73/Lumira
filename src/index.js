@@ -9,7 +9,7 @@ const SYSTEM='You are Lumira, a playful, witty, slightly chaotic but considerate
 async function replyTo(text){
   const key=process.env.GEMINI_API_KEY;
   if(!key) return 'Present and accounted for. ✨ My Gemini brain is waiting for its API key, but I heard you.';
-  const preferredModel=process.env.GEMINI_MODEL||'gemini-2.5-flash';
+  const preferredModel=process.env.GEMINI_MODEL||'gemini-3.8-flash';
   const controller=new AbortController();
   const timeout=setTimeout(()=>controller.abort(),20000);
   try {
@@ -17,7 +17,7 @@ async function replyTo(text){
     if(!listRes.ok){console.error('Gemini model discovery failed with HTTP',listRes.status);throw new Error('Gemini API key or model access problem')}
     const catalog=await listRes.json();
     const models=(catalog.models||[]).filter(m=>m.supportedGenerationMethods?.includes('generateContent')).map(m=>m.name.replace('models/',''));
-    const candidates=[...new Set([preferredModel,'gemini-2.5-flash-lite','gemini-2.0-flash',...models])].filter(m=>models.includes(m)).slice(0,8);
+    const candidates=[...new Set([preferredModel,'gemini-3.8-flash','gemini-3.5-flash-lite','gemini-3.1-pro-preview',...models.filter(m=>/flash|pro/.test(m))])].filter(m=>models.includes(m)&&!/tts|audio|image|embedding|live|robotics/i.test(m)).slice(0,8);
     if(!candidates.length){console.error('No supported Gemini text models');throw new Error('No supported Gemini model')}
     let res;
     for(const model of candidates){
@@ -29,7 +29,7 @@ async function replyTo(text){
       if(res.ok)break;
       const errorBody=await res.json().catch(()=>({}));
       console.error('Gemini HTTP',res.status,'model',model,'reason',String(errorBody.error?.message||'unknown').slice(0,250));
-      if(res.status!==404)throw new Error('Gemini API error '+res.status);
+      if(res.status!==404 && res.status!==400)throw new Error('Gemini API error '+res.status);
     }
     if(!res?.ok)throw new Error('No Gemini model succeeded');
     const data=await res.json();
