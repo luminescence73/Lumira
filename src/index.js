@@ -3,7 +3,7 @@ import { Client, GatewayIntentBits, Events, MessageFlags } from 'discord.js';
 const token=process.env.DISCORD_TOKEN;
 if(!token) throw new Error('DISCORD_TOKEN is required');
 const allowed=new Set((process.env.LUMIRA_CHANNEL_IDS||'').split(',').map(s=>s.trim()).filter(Boolean));
-const client=new Client({intents:[GatewayIntentBits.Guilds,GatewayIntentBits.GuildMessages,GatewayIntentBits.MessageContent]});
+const client=new Client({intents:[GatewayIntentBits.Guilds]});
 const cooldown=new Map();
 const SYSTEM='You are Lumira, a playful, witty, slightly chaotic but considerate Discord companion in a private adult friend group called LumiVibe. Keep replies brief and conversational. Be funny when appropriate, not mean or intrusive. Do not invent facts about members or their relationships. Do not make jokes about private drama, trauma or sensitive topics. Never pressure participation, never ask generic engagement questions, and never claim to remember messages you have not been given. Avoid pinging @everyone or @here.';
 async function replyTo(text){
@@ -22,9 +22,4 @@ client.on(Events.InteractionCreate,async interaction=>{
  await interaction.deferReply();
  try{await interaction.editReply({content:await replyTo(interaction.options.getString('message')),allowedMentions:{parse:[]}})}catch(e){console.error(e);await interaction.editReply('I tripped over a cable. Try again in a moment. 💙')}
 });
-client.on(Events.MessageCreate,async message=>{
- if(!message.guild||message.author.bot||!allowed.has(message.channelId)||!message.mentions.has(client.user))return;
- if(!canRespond(message.author.id))return;
- try{await message.reply({content:await replyTo(message.content.replace(new RegExp('<@!?'+client.user.id+'>','g'),'').trim()),allowedMentions:{parse:[],repliedUser:false}})}catch(e){console.error(e)}
-});
-await client.login(token);
+// Mention replies are disabled until the Message Content intent is authorized.\nawait client.login(token);
