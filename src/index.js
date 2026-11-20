@@ -2,7 +2,7 @@ import 'dotenv/config';
 import {installOperations} from './operations.js';
 import {deliverEventReminders} from './event-delivery.js';
 import {socialDirection,playfulActivity} from './social-persona.js';
-import {courtPrompt,roastRound,quoteSubmit,quoteRound,emojiForSocialMessage} from './social-games.js';
+import {courtPrompt,roastRound,quoteSubmit,quoteRound,guessQuote,revealQuote,emojiForSocialMessage} from './social-games.js';
 import {lumiVibeCanonContext} from './lumivibe-canon.js';
 import {organizeVisualEmojis} from './emoji-visual.js';
 import {quotaReady,quotaDelay,isQuotaFailure,retryDelay} from './gemini-quota.js';
@@ -262,6 +262,8 @@ client.once(Events.ClientReady,async c=>{
  .addSubcommand(s=>s.setName('roast').setDescription('Opt into a friendly roast battle'))
  .addSubcommand(s=>s.setName('quote-add').setDescription('Submit your own approved quote for Who Said That?').addStringOption(o=>o.setName('quote').setDescription('Your own quote').setRequired(true).setMaxLength(180)))
  .addSubcommand(s=>s.setName('who-said').setDescription('Play Who Said That? using approved quotes'))
+ .addSubcommand(s=>s.setName('guess').setDescription('Guess who submitted the current quote').addUserOption(o=>o.setName('member').setDescription('Who said it?').setRequired(true)))
+ .addSubcommand(s=>s.setName('reveal').setDescription('Reveal the current Who Said That? answer'))
  .addSubcommand(s=>s.setName('leaderboard').setDescription('See the trivia leaderboard'))
  .addSubcommand(s=>s.setName('award').setDescription('Give someone a silly fictional award').addUserOption(o=>o.setName('member').setDescription('Recipient').setRequired(true)).addStringOption(o=>o.setName('title').setDescription('Funny award title').setRequired(true).setMaxLength(75)))
  .addSubcommand(s=>s.setName('awards').setDescription('View recent fictional awards')).toJSON();
@@ -405,7 +407,9 @@ client.on(Events.InteractionCreate,async interaction=>{
     return interaction.editReply({content:answer,allowedMentions:{parse:[]}});
    }
    if(sub==='quote-add'){quoteSubmit(g,interaction.channelId,interaction.user.id,interaction.options.getString('quote'));return interaction.reply({content:'📜 Your quote was added to this channel’s opt-in Who Said That? collection (until restart).',flags:MessageFlags.Ephemeral});}
-   if(sub==='who-said'){const round=quoteRound(g,interaction.channelId);return interaction.reply({content:'🕵️ **Who Said That?**\\n“'+round.quote+'”\\nGuess who submitted this quote! The answer is hidden for now. Ask the author to reveal themselves.',allowedMentions:{parse:[]}});}
+   if(sub==='who-said'){const round=quoteRound(g,interaction.channelId);return interaction.reply({content:'🕵️ **Who Said That?**\n“'+round.quote+'”\nGuess who submitted this quote! The answer is hidden for now. Use /lumira-play guess to make your guess, or /lumira-play reveal for the answer.',allowedMentions:{parse:[]}});}
+   if(sub==='guess'){const result=guessQuote(g,interaction.channelId,interaction.options.getUser('member').id);return interaction.reply({content:result.correct?'🎉 Correct! The quote was submitted by '+interaction.options.getUser('member').username+'.':'Not quite! Try another guess.',allowedMentions:{parse:[]}});}
+   if(sub==='reveal'){const answer=revealQuote(g,interaction.channelId);const user=await interaction.client.users.fetch(answer).catch(()=>null);return interaction.reply({content:'🎭 The quote was submitted by '+(user?.username||'a member')+'!',allowedMentions:{parse:[]}});}
    if(sub==='leaderboard')return interaction.reply({content:'🏆 **LumiVibe Trivia Leaderboard**\n'+leaderboard(g),allowedMentions:{parse:[]}});
    if(sub==='awards')return interaction.reply({content:'🏅 **Recent Fictional Awards**\n'+(recentAwards(g).map(a=>'<@'+a.to+'>: '+a.title).join('\n')||'No awards yet.'),allowedMentions:{parse:[]}});
    const target=interaction.options.getUser('member'),title=interaction.options.getString('title');
