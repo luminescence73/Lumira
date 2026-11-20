@@ -162,7 +162,7 @@ async function answerChat({ target, user, prompt, deliver, message, member }) {
     const roasts = settings(guildId).roasts;
     const tone = guildId === LUMIVIBE_GUILD_ID ? messageTone({ author: user, guild, member }) : '';
     const roastRules = roasts
-      ? 'Roast only with clear permission from the target. Tease established friends lightly when the context welcomes it. Keep jokes away from private details or sensitive traits.\n'
+      ? 'Use equally sharp, witty, playful roast intensity with every established friend regardless of gender or girls-girl/diva status when the conversation welcomes banter. Never confuse who is speaking with who is being teased. Avoid personal vulnerabilities, sensitive traits, and private details; stop when asked.\n'
       : 'Roasts are disabled in this server. Give only gentle, friendly banter, even if asked to roast someone.\n';
     const mentions = message?.mentions.users;
     const members = guild.members?.cache;
@@ -186,15 +186,11 @@ async function answerChat({ target, user, prompt, deliver, message, member }) {
     if (roasts && friend && !approvedRoast) return false;
     let friendPrompt;
     if (approvedRoast) {
-      friendPrompt = gentle
-        ? 'LUMIVIBE GIRLS’ GIRL TEASING: A permitted request asks for a playful tease of ' +
-          friend.name +
-          '. Give one affectionate, silly line that she could laugh along with. Give her a little hype or end with a warm wink. Make the joke about a fictional low-stakes situation. Keep the punchline playful even if the requester wanted a harsh roast. Avoid pile-ons, real insecurities, appearance, sensitive traits, private details, name-calling and pings. Deliver the joke immediately. Maximum 220 characters.'
-        : 'LUMIVIBE FRIEND ROAST: ' +
-          friend.name +
-          ' is on the server’s friendly banter list. Give one playful diva-style roast directed at ' +
-          friend.name +
-          ' only. Use silly exaggeration or an innocuous gaming joke. Deliver the joke immediately without asking for permission or referencing rules. Avoid real insecurities and sensitive traits. Use a plain name with no ping. Maximum 220 characters.';
+      friendPrompt = 'LUMIVIBE CONSISTENT FRIEND ROAST: A permitted playful roast request targets ' +
+        friend.name +
+        ' (Discord user ID ' + (friend.id || 'unavailable') + '). Deliver ONE witty, savage-but-friendly roast directed ONLY at ' +
+        friend.name +
+        '. Use the SAME punchline strength for Lumi, Gracie, Moonie, Shug, Tee, Mitsuto, Megu, Dante and Kiz; no gender-based softness or favoritism. Use clever absurdity, gaming jokes, or harmless fictional exaggeration. Never reference real insecurities, appearance, sensitive traits, private details, threats or slurs. No pings, no name confusion, and back off if asked. Maximum 220 characters.';
     }
     const input =
       friendPrompt ||
