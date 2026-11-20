@@ -1,5 +1,5 @@
 // Social tone changes by member; use IDs where supplied and display names only as fallback.
-const GIRLS = new Set(['858115465074966528']);
+const GIRLS = new Set(['858115465074966528', '732707487899451454']);
 const BOYS = new Set(['1451794009872797850', '237586130038423552', '1495189750162657400', '1272841728952369172']);
 const normalize = (value) =>
   String(value || '')
@@ -59,7 +59,7 @@ export function friendRoastTarget(prompt, mentions, members) {
 
 const girls = [
   { name: 'Lumi', aliases: ['lumi', 'luminescence73'] },
-  { name: 'Gracie', aliases: ['gracie', 'bgracie'] },
+  { name: 'Gracie', id: '732707487899451454', aliases: ['gracie', 'bgracie'] },
   { name: 'Moonie', id: '858115465074966528', aliases: ['moonie', 'moony', 'meatshieldmoonie'] },
 ];
 
