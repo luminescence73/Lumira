@@ -242,8 +242,8 @@ export async function finishCleanupAndControlOnce(guild){
  if(!live||!logs)throw Error('Lumira Control channels missing');
  const me=await guild.members.fetchMe();
  if(!me.permissionsIn(live).has(PermissionFlagsBits.SendMessages)||!me.permissionsIn(logs).has(PermissionFlagsBits.SendMessages))throw Error('Lumira cannot send messages in control channels');
- await live.send({content:'🦋 **LumiVibe Liveboard**\\nThis is the private home for Lumira activity and server highlights.\\n\\n**Available now:** member directory, scrapbook, games, event reminders, and server customization.\\n**Note:** This is a setup board, not a live-updating dashboard yet.'});
- await logs.send({content:'🔐 **Lumira Bot Logs**\\nPrivate administrative log channel initialized.\\n**Completed setup:** organized server channels, preserved original #cosmic-chaos and #game-updates, removed requested duplicates and empty categories.\\nFurther bot activity logging will require event handlers; this message confirms setup only.'});
+ await live.send({content:'🦋 **LumiVibe Liveboard**\nThis is the private home for Lumira activity and server highlights.\n\n**Available now:** member directory, scrapbook, games, event reminders, and server customization.\n**Note:** This is a setup board, not a live-updating dashboard yet.'});
+ await logs.send({content:'🔐 **Lumira Bot Logs**\nPrivate administrative log channel initialized.\n**Completed setup:** organized server channels, preserved original #cosmic-chaos and #game-updates, removed requested duplicates and empty categories.\nFurther bot activity logging will require event handlers; this message confirms setup only.'});
  report.push('Posted setup messages in liveboard and bot-logs');
  s.finalCleanupVersion=1;await save();return {alreadyDone:false,report};
 }
@@ -261,4 +261,24 @@ export async function publishEmojiDirectoryOnce(guild){
  for(const line of lines){if(page.length+line.length+2>1750){await channel.send({content:page});posted++;page=''}page+=(page?'\n':'')+line}
  if(page){await channel.send({content:page});posted++}
  s.emojiDirectoryVersion=1;await save();return {count:emojis.length,messages:posted};
+}
+
+export async function repairControlFormattingOnce(guild){
+ const s=state(guild.id);if(s.controlFormattingVersion===1)return {alreadyDone:true};
+ const control=guild.channels.cache.find(x=>x.type===ChannelType.GuildCategory&&norm(x.name)===norm('✦ LUMIRA CONTROL'));
+ if(!control)throw Error('Lumira Control category not found');
+ const report=[];
+ for(const name of ['liveboard','bot-logs']){
+  const channel=guild.channels.cache.find(x=>x.type===ChannelType.GuildText&&x.parentId===control.id&&norm(x.name)===name);
+  if(!channel)throw Error(name+' channel not found');
+  const messages=await channel.messages.fetch({limit:100});
+  let repaired=0;
+  for(const message of messages.values()){
+   if(message.author.id!==guild.client.user.id||!message.content.includes(String.raw`\n`))continue;
+   await message.edit(message.content.split(String.raw`\n`).join('\n'));
+   repaired++;
+  }
+  report.push(name+': repaired '+repaired+' existing messages');
+ }
+ s.controlFormattingVersion=1;await save();return {alreadyDone:false,report};
 }
