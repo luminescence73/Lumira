@@ -1,91 +1,171 @@
-import {promises as fs} from 'node:fs';
-import path from 'node:path';
-import sharp from 'sharp';
-import {quotaReady,quotaDelay,isQuotaFailure} from './gemini-quota.js';
-const file=path.join(process.env.LUMIRA_DATA_DIR||'/data','emoji-visual.json');
-export const EMOJI_CATEGORIES=['pika','sxs','anime','animal','meme','cute','text'];
-const allowed=EMOJI_CATEGORIES;
-let db={};let writes=Promise.resolve();
-async function load(){try{db=JSON.parse(await fs.readFile(file,'utf8'))}catch(e){if(e.code!=='ENOENT')throw e;db={}}}
-async function save(){const data=JSON.stringify(db);writes=writes.catch(()=>{}).then(async()=>{await fs.mkdir(path.dirname(file),{recursive:true});await fs.writeFile(file+'.tmp',data,{mode:0o600});await fs.rename(file+'.tmp',file)});await writes}
-export function cleanName(s){return String(s||'').toLowerCase().replace(/[^a-z0-9_]/g,'_').replace(/_+/g,'_').replace(/^_|_$/g,'').slice(0,26)}
-async function classify(emoji){
- const key=process.env.GEMINI_API_KEY;if(!key)throw Error('Gemini API key unavailable');
- const url=emoji.imageURL({extension:emoji.animated?'gif':'png',size:128});
- const res=await fetch(url,{signal:AbortSignal.timeout(10000)});
- if(!res.ok)throw Error('Emoji image unavailable '+res.status);
- const raw=Buffer.from(await res.arrayBuffer());if(raw.length>1000000)throw Error('Emoji image too large');
- const bytes=await sharp(raw,{animated:false}).resize(128,128,{fit:'contain'}).png().toBuffer();
- const mime='image/png';
- const instructions='Identify what this Discord emoji image DEPICTS, not the emotion. Categories: pika for Pikachu/Pichu/Raichu; sxs for Sword x Staff game characters, logos or icons; anime for identifiable anime art; animal for other animals; meme for obvious meme characters/images; text for mainly written words; cute for cute designs not fitting above. Return ONLY compact JSON {"category":"pika|sxs|anime|animal|meme|cute|text|unknown","subject":"short descriptive subject in lowercase snake_case","confidence":0.0}. If unsure or blurry, use unknown. Name the visible subject accurately; for a reaction face include the expression or action. Do not guess based on the original filename.';
- const model=process.env.GEMINI_MODEL||'gemini-3.5-flash-lite';
- if(!quotaReady(model))throw Error('Gemini quota cooldown active');
- const response=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+encodeURIComponent(model)+':generateContent',{
-  method:'POST',headers:{'x-goog-api-key':key,'Content-Type':'application/json'},signal:AbortSignal.timeout(25000),
-  body:JSON.stringify({contents:[{role:'user',parts:[{text:instructions},{inlineData:{mimeType:mime,data:bytes.toString('base64')}}]}],generationConfig:{temperature:0,responseMimeType:'application/json',maxOutputTokens:150}})
- });
- if(!response.ok){const detail=await response.text().catch(()=> '');if(isQuotaFailure(response.status,detail))quotaDelay(model,60*60*1000);throw Error('Vision request '+response.status)}
- const body=await response.json();
- const responseText=body.candidates?.[0]?.content?.parts?.map(x=>x.text||'').join('')||'';
- const data=JSON.parse(responseText);
- if(!allowed.includes(data.category)||!Number.isFinite(Number(data.confidence)))return {category:'unknown',subject:'',confidence:0};
- return {category:data.category,subject:cleanName(data.subject),confidence:Number(data.confidence)};
+import { PermissionFlagsBits } from 'discord.js';
+import { classifyEmoji, cleanName, EMOJI_CATEGORIES, visionUnavailable } from './emoji-classifier.js';
+import { jsonStore } from './json-store.js';
+
+export { EMOJI_CATEGORIES };
+const store = jsonStore('emoji-visual.json');
+const version = 2;
+const reviewBackoff = 6 * 60 * 60_000;
+const editSpacing = 5_000;
+const running = new Set();
+
+export function classificationAction(emoji, record, now = Date.now()) {
+  if (emoji.managed) return 'skip';
+  if (record?.version !== version) return 'scan';
+  if (record.status === 'verified' && record.name === emoji.name) return 'skip';
+  if (record.status === 'pending' && [record.previous, record.name].includes(emoji.name)) return 'resume';
+  if (['review', 'error'].includes(record.status) && record.name === emoji.name && now < record.retryAt)
+    return 'skip';
+  return 'scan';
 }
-// Revisit failures after a delay. Never mark an unknown image permanently completed.
-const RETRY_MS=6*60*60*1000;
-export function classificationAction(emoji,record,now=Date.now()){
- // Legacy 'renamed' records were not image-verified and must be rescanned.
- if(record?.status==='review'||record?.status==='error')return now-(record.at||0)<RETRY_MS?'skip':'scan';
- // Existing prefixes are not evidence of visual classification: review them once.
- if(record?.status==='verified'&&record.name===emoji.name)return 'skip';
- return 'scan';
-}
-export function uniqueEmojiName(category,subject,used,current){
- if(!allowed.includes(category))throw Error('Invalid emoji category');
- const base=cleanName(category+'_'+subject).slice(0,32);
- if(!cleanName(subject)||base.length<4||base===category+'_')throw Error('Emoji subject missing');
- let name=base,n=2;
- while(used.has(name)&&name!==current.toLowerCase()&&n<=100){const suffix='_'+n++;name=base.slice(0,32-suffix.length)+suffix}
- if(used.has(name)&&name!==current.toLowerCase())throw Error('No available emoji name');
- return name;
-}
-let running=false;
-export async function organizeVisualEmojis(guild,{maxScans=8}={}){
- if(running)return {running:true};running=true;
- try{
-  await load();
-  const emojis=[...(await guild.emojis.fetch()).values()];
-  const guildDb=db[guild.id]||(db[guild.id]={});
-  const report={renamed:0,verified:0,review:0,skipped:0,errors:0,remaining:0};
-  const used=new Set(emojis.map(e=>e.name.toLowerCase()));
-  let scans=0;
-  for(const emoji of emojis){
-   const record=guildDb[emoji.id];
-   if(!process.env.GEMINI_API_KEY){report.remaining++;break;}
-   if(classificationAction(emoji,record)==='skip'){report.skipped++;continue}
-   if(scans>=maxScans){report.remaining++;continue}
-   scans++;
-   try{
-    const result=await classify(emoji);
-    if(result.category==='unknown'||result.confidence<0.88||!result.subject){
-     guildDb[emoji.id]={status:'review',name:emoji.name,classification:result,at:Date.now()};report.review++;await save();continue;
-    }
-    const previousName=emoji.name;
-    const target=uniqueEmojiName(result.category,result.subject,used,previousName);
-    if(target!==emoji.name){
-     const oldName=previousName.toLowerCase();
-     await emoji.edit({name:target,reason:'Owner-approved image-based emoji classification'});
-     used.delete(oldName);used.add(target);report.renamed++;
-    }else report.verified++;
-    guildDb[emoji.id]={status:'verified',name:target,previous:previousName,classification:result,at:Date.now()};
-    await save();
-   }catch(e){
-    report.errors++;console.error('Visual emoji '+emoji.id+':',e.message);
-    guildDb[emoji.id]={status:'error',name:emoji.name,reason:e.message,at:Date.now()};await save();
-    if(/429|403|401|cooldown|Vision request 5/.test(e.message))break;
-   }
+
+export function uniqueEmojiName(category, subject, used, current) {
+  if (!EMOJI_CATEGORIES.includes(category)) throw Error('Invalid emoji category');
+  const suffix = cleanName(subject).replace(new RegExp('^' + category + '_'), '');
+  if (!suffix) throw Error('Emoji subject missing');
+  const base = (category + '_' + suffix).slice(0, 32).replace(/_$/, '');
+  const occupied = (name) =>
+    used instanceof Map
+      ? (used.get(name) || 0) > (name === current.toLowerCase() ? 1 : 0)
+      : used.has(name) && name !== current.toLowerCase();
+  let name = base;
+  for (let n = 2; occupied(name) && n <= 1000; n++) {
+    const number = '_' + n;
+    name = base.slice(0, 32 - number.length).replace(/_$/, '') + number;
   }
-  console.log('LumiVibe visual emoji organization:',JSON.stringify(report));
+  if (occupied(name)) throw Error('No available emoji name');
+  return name;
+}
+
+function countNames(emojis) {
+  const names = new Map();
+  for (const emoji of emojis) {
+    const name = emoji.name.toLowerCase();
+    names.set(name, (names.get(name) || 0) + 1);
+  }
+  return names;
+}
+
+function describeClassification(name, status, extra = {}) {
+  return { version, status, name, at: Date.now(), ...extra };
+}
+
+export function createEmojiOrganizer({
+  storage = store,
+  classify = classifyEmoji,
+  wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+  hasKey = () => Boolean(process.env.GEMINI_API_KEY),
+} = {}) {
+  // A shared state file must have a single reader/writer for the duration of a batch.
+  return async function organizeVisualEmojis(guild, { maxScans = 8, maxRenames = 4 } = {}) {
+    if (running.size) return { running: true };
+    if (!hasKey()) return { unavailable: 'Gemini vision is unconfigured' };
+    running.add(guild.id);
+    try {
+      const member = await guild.members.fetchMe();
+      if (!member.permissions.has(PermissionFlagsBits.ManageGuildExpressions)) {
+        return { unavailable: 'Lumira needs Manage Expressions to rename emojis' };
+      }
+      const data = await storage.load();
+      const records = (data[guild.id] ??= {});
+      const emojis = [...(await guild.emojis.fetch()).values()];
+      const names = countNames(emojis);
+      const report = { scanned: 0, renamed: 0, verified: 0, review: 0, skipped: 0, errors: 0, remaining: 0 };
+      // New inventory goes before rechecks so uncertain images cannot starve later items.
+      const work = emojis
+        .map((emoji) => ({
+          emoji,
+          record: records[emoji.id],
+          action: classificationAction(emoji, records[emoji.id]),
+        }))
+        .sort((a, b) => (a.record?.at || 0) - (b.record?.at || 0));
+      for (const { emoji, record, action } of work) {
+        if (action === 'skip') {
+          report.skipped++;
+          continue;
+        }
+        if (report.scanned >= maxScans || report.renamed >= maxRenames || report.paused) {
+          report.remaining++;
+          continue;
+        }
+        let result = record?.classification;
+        let planned;
+        try {
+          if (action === 'scan') {
+            report.scanned++;
+            result = await classify(emoji);
+          }
+          if (
+            !result ||
+            !EMOJI_CATEGORIES.includes(result.category) ||
+            !Number.isFinite(result.confidence) ||
+            result.confidence < 0.88 ||
+            !result.subject
+          ) {
+            records[emoji.id] = describeClassification(emoji.name, 'review', {
+              classification: result,
+              retryAt: Date.now() + reviewBackoff,
+            });
+            report.review++;
+            await storage.save(data);
+            continue;
+          }
+          const original = emoji.name;
+          const target = uniqueEmojiName(result.category, result.subject, names, original);
+          planned = describeClassification(target, 'pending', {
+            classification: result,
+            previous: action === 'resume' ? record.previous : original,
+          });
+          if (original !== target) {
+            if (report.renamed) await wait(editSpacing);
+            // Save the visual decision before the edit so a restarted worker can resume.
+            records[emoji.id] = planned;
+            await storage.save(data);
+            await emoji.edit({ name: target, reason: 'Owner-approved image-based emoji classification' });
+            const oldName = original.toLowerCase();
+            names.set(oldName, names.get(oldName) - 1);
+            names.set(target, (names.get(target) || 0) + 1);
+            report.renamed++;
+          } else {
+            report.verified++;
+          }
+          records[emoji.id] = { ...planned, status: 'verified' };
+          await storage.save(data);
+        } catch (error) {
+          if (visionUnavailable(error) || error.status === 429 || [50001, 50013].includes(error.code)) {
+            report.paused = true;
+            report.remaining++;
+            console.warn('Visual emoji batch paused:', error.message);
+            continue;
+          }
+          report.errors++;
+          console.warn('Visual emoji scan failed:', emoji.id, error.message);
+          // A saved rename plan is reusable after a transient Discord error.
+          records[emoji.id] =
+            planned ?? describeClassification(emoji.name, 'error', { retryAt: Date.now() + reviewBackoff });
+          await storage.save(data);
+        }
+      }
+      return report;
+    } finally {
+      running.delete(guild.id);
+    }
+  };
+}
+
+export const organizeVisualEmojis = createEmojiOrganizer();
+
+export async function emojiReview(guild) {
+  const records = (await store.load())[guild.id] || {};
+  const report = { verified: 0, review: [], pending: 0, managed: 0 };
+  for (const emoji of (await guild.emojis.fetch()).values()) {
+    const record = records[emoji.id];
+    if (emoji.managed) report.managed++;
+    else if (record?.version === version && record.status === 'verified' && record.name === emoji.name)
+      report.verified++;
+    else if (record?.version === version && ['review', 'error'].includes(record.status))
+      report.review.push(emoji.name);
+    else report.pending++;
+  }
   return report;
- }finally{running=false}
 }

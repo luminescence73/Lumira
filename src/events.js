@@ -1,9 +1,50 @@
-import {promises as fs} from 'node:fs';
-import path from 'node:path';
-const file=path.join(process.env.LUMIRA_DATA_DIR||'/data','events.json');let db={},queue=Promise.resolve();
-export async function loadEvents(){try{db=JSON.parse(await fs.readFile(file,'utf8'))}catch(e){if(e.code!=='ENOENT')throw e;db={}}console.log('Lumira events ready')}
-const state=g=>db[g]||(db[g]={events:[]});
-async function save(){const data=JSON.stringify(db);queue=queue.catch(()=>{}).then(async()=>{await fs.mkdir(path.dirname(file),{recursive:true});await fs.writeFile(file+'.tmp',data,{mode:0o600});await fs.rename(file+'.tmp',file)});await queue}
-export async function schedule(g,channel,title,when){if(!Number.isFinite(when)||when<Date.now()+60000||when>Date.now()+90*86400000)throw Error('Choose a time 1 minute to 90 days in the future');const s=state(g);if(s.events.filter(e=>!e.sent).length>=10)throw Error('Maximum 10 pending events');s.events.push({channel,title:title.slice(0,80),when,sent:false});await save()}
-export function upcoming(g){return state(g).events.filter(e=>!e.sent&&e.when>Date.now()).sort((a,b)=>a.when-b.when).slice(0,10)}
-export async function dueEvents(){const due=[];for(const [g,s] of Object.entries(db)){for(const e of s.events||[]){if(!e.sent&&e.when<=Date.now()){e.sent=true;due.push({g,...e})}}s.events=(s.events||[]).filter(e=>e.when>Date.now()-7*86400000)}if(due.length)await save();return due}
+import { randomBytes } from 'node:crypto';
+import { jsonStore } from './json-store.js';
+
+const store = jsonStore('events.json');
+const minute = 60_000;
+const day = 24 * 60 * minute;
+let db = {};
+
+export async function loadEvents() {
+  db = await store.load();
+}
+
+function eventsFor(guildId) {
+  return ((db[guildId] ??= {}).events ??= []);
+}
+
+export async function schedule(guildId, channel, title, when) {
+  if (!Number.isFinite(when) || when < Date.now() + minute || when > Date.now() + 90 * day) {
+    throw Error('Choose a time 1 minute to 90 days in the future');
+  }
+  const events = eventsFor(guildId);
+  if (events.filter((event) => !event.sent).length >= 10) throw Error('Maximum 10 pending events');
+  events.push({ id: randomBytes(8).toString('hex'), channel, title: title.slice(0, 80), when, sent: false });
+  await store.save(db);
+}
+
+export function upcoming(guildId, now = Date.now()) {
+  return eventsFor(guildId)
+    .filter((event) => !event.sent && event.when > now)
+    .sort((a, b) => a.when - b.when)
+    .slice(0, 10);
+}
+
+export function dueEvents(now = Date.now()) {
+  const due = [];
+  for (const guildId of Object.keys(db)) {
+    for (const event of eventsFor(guildId)) {
+      if (!event.sent && event.when <= now) due.push({ guildId, event });
+    }
+  }
+  return due;
+}
+
+export async function finishEvent(event) {
+  event.sent = true;
+  for (const state of Object.values(db)) {
+    state.events = (state.events || []).filter((entry) => !entry.sent || entry.when > Date.now() - 7 * day);
+  }
+  await store.save(db);
+}
