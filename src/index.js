@@ -2,6 +2,7 @@ import 'dotenv/config';
 import {installOperations} from './operations.js';
 import {emberSpringsContext} from './ember-springs.js';
 import {organizeVisualEmojis} from './emoji-visual.js';
+import {quotaReady,quotaDelay,isQuotaFailure} from './gemini-quota.js';
 import {loadAdmin,config,authorize,privateAccess,stage,discard,proposals,preview,applyGuild,layoutPreview,makeChannel,imageForEmoji,imageForSticker,layoutPlan,applyLayout,applyLayoutOnce,finishLayoutOnce,populateEmptySectionsOnce,reconcileLegacyChannelsOnce,organizeEverythingOnce,restoreOriginalChannelsOnce,finishCleanupAndControlOnce,publishEmojiDirectoryOnce,repairControlFormattingOnce,organizeEmojiNamesOnce,refreshLiveboard,authorizeGracieStickerImportOnce,refreshStickerDirectory} from './admin.js';
 import {loadRoster,syncRoster,roster,findMembers} from './roster.js';
 import {loadEvents,schedule,upcoming,dueEvents} from './events.js';
@@ -128,6 +129,7 @@ async function replyTo(text,style='chaotic'){
  if(!key) throw new Error('GEMINI_API_KEY missing');
  const models=[...new Set([process.env.GEMINI_MODEL||'gemini-3.5-flash-lite','gemini-3.5-flash-lite','gemini-3.8-flash'])];
  for(const model of models){
+  if(!quotaReady(model))continue;
   const controller=new AbortController();
   const timeout=setTimeout(()=>controller.abort(),22000);
   try{
@@ -135,7 +137,7 @@ async function replyTo(text,style='chaotic'){
     method:'POST',signal:controller.signal,headers:{'x-goog-api-key':key,'Content-Type':'application/json'},
     body:JSON.stringify({systemInstruction:{parts:[{text:SYSTEM}]},contents:[{role:'user',parts:[{text:text.slice(0,12000)}]}],generationConfig:{maxOutputTokens:200,temperature:0.9}})
    });
-   if(!res.ok){const error=await res.json().catch(()=>({}));console.error('Gemini model',model,'HTTP',res.status,'reason',String(error.error?.message||'unknown').slice(0,220));if([400,404,429,500,502,503,504].includes(res.status))continue;throw new Error('Gemini API error '+res.status)}
+   if(!res.ok){const error=await res.json().catch(()=>({}));console.error('Gemini model',model,'HTTP',res.status,'reason',String(error.error?.message||'unknown').slice(0,220));if(isQuotaFailure(res.status,error.error?.message)){quotaDelay(model,60*60*1000);continue}if([400,404,500,502,503,504].includes(res.status))continue;throw new Error('Gemini API error '+res.status)}
    const data=await res.json();
    const answer=data.candidates?.[0]?.content?.parts?.filter(p=>typeof p.text==='string').map(p=>p.text).join('').trim();
    if(answer){console.log('Gemini response succeeded using',model);return answer.slice(0,1800)}
@@ -181,7 +183,12 @@ installOperations(client);
 client.once(Events.ClientReady,async c=>{
  console.log('Lumira online as '+c.user.tag);
  console.log('Gateway intents:',intents.join(','),'guild count:',c.guilds.cache.size);
- for(const guild of c.guilds.cache.values()){console.log('Guild:',guild.id,'name:',guild.name,'bot member cached:',Boolean(guild.members.me));syncRoster(guild).catch(e=>console.error('Member directory sync:',e.message));if(guild.id==='1472157525490139174')void organizeVisualEmojis(guild).catch(e=>console.error('Visual emoji organization failed:',e.message));if(guild.id==='1472157525490139174'){for(const [label,fn] of [['layout',applyLayoutOnce],['legacy cleanup',finishLayoutOnce],['voice and control',populateEmptySectionsOnce],['legacy organization',reconcileLegacyChannelsOnce],['full organization',organizeEverythingOnce],['restore original channel names',restoreOriginalChannelsOnce],['duplicate cleanup and control posts',finishCleanupAndControlOnce],['Gracie sticker authorization',authorizeGracieStickerImportOnce],['sticker directory',refreshStickerDirectory],['emoji naming',organizeEmojiNamesOnce],['emoji directory',publishEmojiDirectoryOnce],['repair control formatting',repairControlFormattingOnce],['liveboard design',refreshLiveboard]]){try{const result=await fn(guild);console.log('LumiVibe '+label+':',JSON.stringify(result))}catch(e){console.error('LumiVibe '+label+' failed:',e.stack||e.message)}}}}
+ for(const guild of c.guilds.cache.values()){console.log('Guild:',guild.id,'name:',guild.name,'bot member cached:',Boolean(guild.members.me));syncRoster(guild).catch(e=>console.error('Member directory sync:',e.message));if(guild.id==='1472157525490139174'){
+   // Visual classification is low priority. Run only a tiny batch every six hours.
+   const runVisual=()=>organizeVisualEmojis(guild,{maxScans:3}).catch(e=>console.error('Visual emoji organization failed:',e.message));
+   setTimeout(runVisual,15*60*1000).unref();
+   setInterval(runVisual,6*60*60*1000).unref();
+  }if(guild.id==='1472157525490139174'){for(const [label,fn] of [['layout',applyLayoutOnce],['legacy cleanup',finishLayoutOnce],['voice and control',populateEmptySectionsOnce],['legacy organization',reconcileLegacyChannelsOnce],['full organization',organizeEverythingOnce],['restore original channel names',restoreOriginalChannelsOnce],['duplicate cleanup and control posts',finishCleanupAndControlOnce],['Gracie sticker authorization',authorizeGracieStickerImportOnce],['sticker directory',refreshStickerDirectory],['emoji naming',organizeEmojiNamesOnce],['emoji directory',publishEmojiDirectoryOnce],['repair control formatting',repairControlFormattingOnce],['liveboard design',refreshLiveboard]]){try{const result=await fn(guild);console.log('LumiVibe '+label+':',JSON.stringify(result))}catch(e){console.error('LumiVibe '+label+' failed:',e.stack||e.message)}}}}
 
  if(process.env.GEMINI_API_KEY){try{const answer=await replyTo('Reply with one short friendly greeting.');console.log('Gemini startup self-test succeeded; response length:',answer.length)}catch(error){console.error('Gemini startup self-test failed:',error.message)}}
  const memoryCommand=new SlashCommandBuilder().setName('lumira-memory').setDescription('Manage your own opt-in long-term memories')
