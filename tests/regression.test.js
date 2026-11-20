@@ -93,3 +93,19 @@ test('emoji naming produces unique subject-based names', () => {
   );
   assert.throws(() => uniqueEmojiName('unknown', 'face', new Set(), 'old'));
 });
+
+import {loadSocialLore,proposeLore,loreEntries,pendingLore,approveLore,deleteSocialLore,socialLoreContext} from '../src/social-lore.js';
+test('social lore requires both members to approve friendship dynamics',async()=>{
+ process.env.LUMIRA_DATA_DIR ||= '/tmp/lumira-regression-social-lore';
+ await loadSocialLore();
+ const guild='test-'+Date.now();
+ const {entry,pending}=await proposeLore(guild,{kind:'bond',title:'Gaming duo',text:'They always queue together for games',author:'100',members:['100','200']});
+ assert.equal(pending,true);
+ assert.equal(loreEntries(guild).length,0);
+ assert.equal(pendingLore(guild,'200').length,1);
+ assert.equal(await approveLore(guild,entry.id,'200'),true);
+ assert.equal(loreEntries(guild,{memberId:'100'}).length,1);
+ assert.match(socialLoreContext(guild,'200'),/Gaming duo/);
+ await deleteSocialLore(guild,entry.id,'200');
+ assert.equal(loreEntries(guild).length,0);
+});
