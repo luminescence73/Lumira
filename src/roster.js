@@ -7,7 +7,7 @@ async function save(){const data=JSON.stringify(db);queue=queue.catch(()=>{}).th
 export async function syncRoster(guild){
  const found=new Map();let complete=false;
  try{const members=await guild.members.fetch({limit:0,withPresences:false});for(const m of members.values())if(!m.user.bot)found.set(m.id,m);complete=true}
- catch(e){console.warn('Full roster fetch unavailable; saving cached members only:',e.message);for(const m of guild.members.cache.values())if(!m.user.bot)found.set(m.id,m)}
+ catch(e){console.warn('Full roster fetch unavailable; enable Server Members Intent in Discord Developer Portal and set LUMIRA_MEMBERS_INTENT=true:',e.message);for(const m of guild.members.cache.values())if(!m.user.bot)found.set(m.id,m)}
  const prior=db[guild.id]?.members||{};
  const members=complete?{}:{...prior};
  for(const m of found.values())members[m.id]={id:m.id,username:m.user.username,displayName:m.displayName,globalName:m.user.globalName||null,updatedAt:Date.now()};
