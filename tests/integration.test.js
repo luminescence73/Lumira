@@ -106,7 +106,7 @@ test('startup loads persisted state, logs into the injected gateway and register
     [600_000, 60_000],
   );
   assert.deepEqual(commands.map((command) => command.name).sort(), [...commandNames].sort());
-  assert.equal(commandDefinitions().length, 18);
+  assert.equal(commandDefinitions().length, 19);
   assert.ok(createClient().options.intents.has(GatewayIntentBits.GuildExpressions));
   assert.ok(createClient().options.partials.includes(Partials.GuildMember));
   const { settings } = await import('../src/features.js');

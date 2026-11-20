@@ -417,6 +417,29 @@ export function commandDefinitions() {
         .addAttachmentOption((o) => o.setName('image').setDescription('Image attachment').setRequired(true)),
     )
     .toJSON();
+  const copyCommand = new SlashCommandBuilder()
+    .setName('lumira-copy')
+    .setDescription('Copy a Discord sticker or custom emoji into LumiVibe');
+  for (const kind of ['sticker', 'emoji']) {
+    copyCommand.addSubcommand((s) =>
+      s
+        .setName(kind)
+        .setDescription('Copy a Discord ' + kind)
+        .addStringOption((o) =>
+          o
+            .setName('source')
+            .setDescription('Discord message link, ' + kind + ' ID, asset link, or custom emoji code')
+            .setRequired(true)
+            .setMaxLength(300),
+        )
+        .addStringOption((o) =>
+          o
+            .setName('name')
+            .setDescription('Optional new name')
+            .setMaxLength(kind === 'sticker' ? 30 : 32),
+        ),
+    );
+  }
   const forgetCommand = new SlashCommandBuilder()
     .setName('lumira-forget')
     .setDescription('Clear your recent Lumira conversation in this channel')
@@ -440,5 +463,6 @@ export function commandDefinitions() {
     eventCommand,
     rosterCommand,
     adminCommand,
+    copyCommand.toJSON(),
   ];
 }
