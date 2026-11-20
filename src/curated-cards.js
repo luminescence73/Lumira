@@ -20,7 +20,25 @@ export async function publishCuratedCards(guild){
  for(const item of cards){
   const aliases=new Set(item.aliases.map(norm));
   const matches=directory.filter(m=>[m.username,m.displayName,m.globalName].some(v=>{const n=norm(v);return aliases.has(n)||item.aliases.some(a=>a.length>=4&&new RegExp('(?:^|[^a-z0-9])'+a+'(?:$|[^a-z0-9])','i').test(String(v||'')))}));
-  if(matches.length!==1){result[matches.length?'ambiguous':'unmatched'].push(item.name);continue}
+  if(matches.length!==1){
+   // Owner-provided cards can be published without linking a Discord account.
+   // Keep a stable synthetic key to avoid duplicate messages on restart.
+   const key='curated:'+norm(item.name);
+   const saved=profile(guild.id,key);
+   const embed=new EmbedBuilder().setColor(0x9ebdff)
+    .setTitle('✦ '+item.name+' | '+item.title)
+    .setDescription(item.about)
+    .addFields({name:'Known for',value:item.tags})
+    .setFooter({text:'LumiVibe community card • Discord account not linked'});
+   try{
+    let post=saved?.messageId?await channel.messages.fetch(saved.messageId).catch(()=>null):null;
+    if(post){await post.edit({embeds:[embed],allowedMentions:{parse:[]}});result.updated++}
+    else{post=await channel.send({embeds:[embed],allowedMentions:{parse:[]}});result.published++}
+    await setProfile(guild.id,key,{about:item.about,messageId:post.id,curated:true,updatedAt:Date.now()});
+   }catch(e){result.errors.push(item.name+': '+e.message)}
+   result[matches.length?'ambiguous':'unmatched'].push(item.name);
+   continue;
+  }
   const entry=matches[0],existing=profile(guild.id,entry.id);
   // Respect members' own edited profiles. Never overwrite a member-created card.
   if(existing?.optedOut||existing?.automatic===false)continue;
