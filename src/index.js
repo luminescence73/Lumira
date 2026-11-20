@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import {renderCard,studioBoard,generateImage} from './visual.js';
 import {loadFeatures,settings,setSetting,getEgo,setEgo,clearEgo,scrapbookAllowed,setScrapbookOptOut,channelAllowed,excludedChannels,setChannelAllowed,memberMuted,setMemberMuted} from './features.js';
 import {loadLore,jokes,moments,addJoke,deleteJoke,addMoment,deleteMoment,removeAuthorMoments,removeMessageMoment} from './lore.js';
 import { loadMemories, memoryStatus, enableMemory, saveMemory, removeMemory, disableMemory } from './memory.js';
@@ -18,6 +19,9 @@ client.on('raw',packet=>{if(packet.t==='MESSAGE_CREATE')console.log('Gateway MES
 const recentMessages=new Map();
 const activity=new Map();
 const channelPulse=new Map();
+const imageQuota=new Map();
+function imageAvailable(user){const date=new Date().toISOString().slice(0,10),key=date+':'+user,limit=Math.max(1,Math.min(10,Number(process.env.LUMIRA_IMAGE_DAILY_LIMIT)||2));return {key,limit,remaining:Math.max(0,limit-(imageQuota.get(key)||0))}}
+
 function pulse(message){if(!message.inGuild()||message.author.bot||message.webhookId||!publicSocialChannel(message.channel))return;const key=message.guildId;const arr=(channelPulse.get(key)||[]).filter(x=>Date.now()-x.time<24*3600000);arr.push({time:Date.now(),channel:message.channelId});channelPulse.set(key,arr.slice(-1500));bump(key,'messages')}
 function vibe(g){const items=(channelPulse.get(g)||[]).filter(x=>Date.now()-x.time<24*3600000);const channels=new Set(items.map(x=>x.channel)).size;const volume=items.length;return {volume,channels,label:volume<5?'Quiet hours 🌙':volume<30?'Cozy chatter ☕':volume<100?'The group chat is awake 🦋':'Full chaos mode ⚡'}};
 client.on(Events.MessageCreate,pulse);
@@ -151,19 +155,31 @@ client.once(Events.ClientReady,async c=>{
  .addSubcommand(s=>s.setName('exclude').setDescription('Exclude a channel from Lumira social features').addChannelOption(o=>o.setName('channel').setDescription('Channel to exclude').setRequired(true)))
  .addSubcommand(s=>s.setName('include').setDescription('Allow Lumira in a previously excluded channel').addChannelOption(o=>o.setName('channel').setDescription('Channel to include').setRequired(true)))
  .addSubcommand(s=>s.setName('list').setDescription('Show excluded channels')).toJSON();
+ const studioCommand=new SlashCommandBuilder().setName('lumira-studio').setDescription('LumiVibe visual studio')
+ .addSubcommand(s=>s.setName('photo').setDescription('Generate an original AI image (daily limit)').addStringOption(o=>o.setName('prompt').setDescription('Describe a fictional scene').setRequired(true).setMaxLength(400)))
+ .addSubcommand(s=>s.setName('character').setDescription('Make a PNG character card from your opt-in alter ego'))
+ .addSubcommand(s=>s.setName('collage').setDescription('Preview a scrapbook-inspired visual recap (private)'))
+ .addSubcommand(s=>s.setName('dashboard').setDescription('Owner: open visual studio settings')).toJSON();
  const forgetCommand=new SlashCommandBuilder().setName('lumira-forget').setDescription('Clear your recent Lumira conversation in this channel').toJSON();
  try {
    if(process.env.DISCORD_GUILD_ID){
      const guild=await c.guilds.fetch(process.env.DISCORD_GUILD_ID);
-     await guild.commands.set([forgetCommand,memoryCommand,loreCommand,scrapbookCommand,egoCommand,controlCommand,vibeCommand,privacyCommand,channelCommand]);
+     await guild.commands.set([forgetCommand,memoryCommand,loreCommand,scrapbookCommand,egoCommand,controlCommand,vibeCommand,privacyCommand,channelCommand,studioCommand]);
      console.log('Registered /lumira-forget in configured guild');
    } else {
-     await c.application.commands.set([forgetCommand,memoryCommand,loreCommand,scrapbookCommand,egoCommand,controlCommand,vibeCommand,privacyCommand,channelCommand]);
+     await c.application.commands.set([forgetCommand,memoryCommand,loreCommand,scrapbookCommand,egoCommand,controlCommand,vibeCommand,privacyCommand,channelCommand,studioCommand]);
      console.log('Registered /lumira-forget globally (may take time to appear)');
    }
  }catch(error){console.error('Slash command registration failed:',error)}
 });
 client.on(Events.InteractionCreate,async interaction=>{
+ if(interaction.isButton()&&interaction.customId.startsWith('lumira:studio:')){
+  if(!interaction.inGuild()||interaction.guild.ownerId!==interaction.user.id)return interaction.reply({content:'Owner only.',flags:MessageFlags.Ephemeral});
+  const key=interaction.customId.split(':')[2];
+  if(!['photoBooth','characterCards','collages'].includes(key))return interaction.reply({content:'Unknown setting.',flags:MessageFlags.Ephemeral});
+  await setSetting(interaction.guildId,key,!settings(interaction.guildId)[key]);
+  return interaction.update(studioBoard(interaction.guildId,settings(interaction.guildId),{imageReady:Boolean(process.env.GEMINI_IMAGE_API_KEY||process.env.GEMINI_API_KEY),dailyLimit:imageAvailable(interaction.user.id).limit,moments:moments(interaction.guildId).length}));
+ }
  if(interaction.isButton()&&interaction.customId.startsWith('lumira:gallery:')){
   if(!interaction.inGuild())return interaction.reply({content:'Only available in LumiVibe.',flags:MessageFlags.Ephemeral});
   const page=Number(interaction.customId.split(':')[2]);if(!Number.isSafeInteger(page)||page<0)return interaction.reply({content:'Invalid page.',flags:MessageFlags.Ephemeral});
@@ -175,7 +191,38 @@ client.on(Events.InteractionCreate,async interaction=>{
   try{if(!['autoLore','autoScrapbook','spontaneous','roasts'].includes(key))throw Error('Invalid control');await setSetting(interaction.guildId,key,!settings(interaction.guildId)[key]);return interaction.update(liveboard(interaction.guildId))}
   catch(e){return interaction.reply({content:'Could not update: '+e.message,flags:MessageFlags.Ephemeral})}
  }
- if(!interaction.isChatInputCommand()||!['lumira-forget','lumira-memory','lumira-lore','lumira-scrapbook','lumira-ego','lumira-control','lumira-vibe','lumira-privacy','lumira-channels'].includes(interaction.commandName))return;
+ if(!interaction.isChatInputCommand()||!['lumira-forget','lumira-memory','lumira-lore','lumira-scrapbook','lumira-ego','lumira-control','lumira-vibe','lumira-privacy','lumira-channels','lumira-studio'].includes(interaction.commandName))return;
+ if(interaction.commandName==='lumira-studio'){
+  if(!interaction.inGuild())return interaction.reply({content:'Only available in LumiVibe.',flags:MessageFlags.Ephemeral});
+  const g=interaction.guildId,sub=interaction.options.getSubcommand(),s=settings(g);
+  if(sub==='dashboard'){
+   if(interaction.guild.ownerId!==interaction.user.id)return interaction.reply({content:'Owner only.',flags:MessageFlags.Ephemeral});
+   return interaction.reply({...studioBoard(g,s,{imageReady:Boolean(process.env.GEMINI_IMAGE_API_KEY||process.env.GEMINI_API_KEY),dailyLimit:imageAvailable(interaction.user.id).limit,moments:moments(g).length}),flags:MessageFlags.Ephemeral});
+  }
+  const enabled={photo:'photoBooth',character:'characterCards',collage:'collages'}[sub];
+  if(!s[enabled])return interaction.reply({content:'That studio feature is currently disabled.',flags:MessageFlags.Ephemeral});
+  if(memberMuted(g,interaction.user.id))return interaction.reply({content:'You muted Lumira. Unmute before using the studio.',flags:MessageFlags.Ephemeral});
+  const quota=imageAvailable(interaction.user.id);
+  if(sub==='photo'&&quota.remaining<1)return interaction.reply({content:'Your image quota is used up for today. Try tomorrow! 🦋',flags:MessageFlags.Ephemeral});
+  await interaction.deferReply({flags:MessageFlags.Ephemeral});
+  try{
+   if(sub==='photo'){
+    const prompt=interaction.options.getString('prompt');
+    if(/(?:nudity|porn|sexual minor|gore|realistic violence)/i.test(prompt))throw Error('Please choose a safe fictional art prompt.');
+    const image=await generateImage(prompt);
+    imageQuota.set(quota.key,(imageQuota.get(quota.key)||0)+1);
+    return interaction.editReply({content:'🦋 **Lumira Photo Booth** • private preview',files:[image]});
+   }
+   if(sub==='character'){
+    const ego=getEgo(g,interaction.user.id);if(!ego)throw Error('Create your alter ego with /lumira-ego create first.');
+    const image=await renderCard({title:interaction.user.username,subtitle:'Fictional Alter Ego',lines:[ego],kind:'Character Card'});
+    return interaction.editReply({content:'🎭 **Your character card**',files:[image]});
+   }
+   const entries=moments(g).slice(-4).filter(m=>m.url&&m.author&&scrapbookAllowed(g,m.author)&&!memberMuted(g,m.author));
+   const image=await renderCard({title:'LumiVibe Memories',subtitle:'Scrapbook recap • private preview',lines:entries.length?entries.map((m,i)=>'Moment '+(i+1)+' • saved public post') : ['No eligible saved moments yet'],kind:'Memory Collage'});
+   return interaction.editReply({content:'📸 **Private collage preview**\\n'+entries.map((m,i)=>(i+1)+'. '+m.url).join('\\n')+'\\nNothing was automatically published.',files:[image],allowedMentions:{parse:[]}});
+  }catch(e){console.error('Visual studio:',e.message);return interaction.editReply({content:'Visual Studio could not finish: '+e.message})}
+ }
  if(interaction.commandName==='lumira-privacy'){
   if(!interaction.inGuild())return interaction.reply({content:'Only available in LumiVibe.',flags:MessageFlags.Ephemeral});
   const g=interaction.guildId,u=interaction.user.id,sub=interaction.options.getSubcommand();
