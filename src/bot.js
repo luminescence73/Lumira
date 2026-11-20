@@ -1,3 +1,4 @@
+import { loadSocialLore } from './social-lore.js';
 import { Client, Events, GatewayIntentBits, Partials } from 'discord.js';
 import { loadAdmin } from './admin.js';
 import { installAutomaticLore } from './automatic-lore.js';
@@ -71,6 +72,7 @@ export async function startBot({ token, client, scheduleInterval, scheduleTimeou
   await Promise.all([
     loadMemories(),
     loadLore(),
+    loadSocialLore(),
     loadFeatures(),
     loadPlayground(),
     loadEvents(),
