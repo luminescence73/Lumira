@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import {installOperations} from './operations.js';
 import {loadAdmin,config,authorize,privateAccess,stage,discard,proposals,preview,applyGuild,layoutPreview,makeChannel,imageForEmoji,imageForSticker,layoutPlan,applyLayout,applyLayoutOnce,finishLayoutOnce,populateEmptySectionsOnce,reconcileLegacyChannelsOnce,organizeEverythingOnce,restoreOriginalChannelsOnce,finishCleanupAndControlOnce,publishEmojiDirectoryOnce,repairControlFormattingOnce,organizeEmojiNamesOnce,refreshLiveboard} from './admin.js';
 import {loadRoster,syncRoster,roster,findMembers} from './roster.js';
 import {loadEvents,schedule,upcoming,dueEvents} from './events.js';
@@ -174,6 +175,7 @@ async function getPublicConversationContext(message){
 }
 function permitted(channelId){return allowed.size===0||allowed.has(channelId)}
 function canRespond(userId){const now=Date.now();if(now-(cooldown.get(userId)||0)<12000)return false;cooldown.set(userId,now);return true}
+installOperations(client);
 client.once(Events.ClientReady,async c=>{
  console.log('Lumira online as '+c.user.tag);
  console.log('Gateway intents:',intents.join(','),'guild count:',c.guilds.cache.size);
