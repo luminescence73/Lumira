@@ -34,7 +34,7 @@ async function classify(emoji){
 // Revisit failures after a delay. Never mark an unknown image permanently completed.
 const RETRY_MS=6*60*60*1000;
 export function classificationAction(emoji,record,now=Date.now()){
- if(record?.status==='renamed'&&record.name===emoji.name)return 'skip';
+ // Legacy 'renamed' records were not image-verified and must be rescanned.
  if(record?.status==='review'||record?.status==='error')return now-(record.at||0)<RETRY_MS?'skip':'scan';
  // Existing prefixes are not evidence of visual classification: review them once.
  if(record?.status==='verified'&&record.name===emoji.name)return 'skip';
@@ -43,7 +43,7 @@ export function classificationAction(emoji,record,now=Date.now()){
 export function uniqueEmojiName(category,subject,used,current){
  if(!allowed.includes(category))throw Error('Invalid emoji category');
  const base=cleanName(category+'_'+subject).slice(0,32);
- if(base.length<4||base===category+'_')throw Error('Emoji subject missing');
+ if(!cleanName(subject)||base.length<4||base===category+'_')throw Error('Emoji subject missing');
  let name=base,n=2;
  while(used.has(name)&&name!==current.toLowerCase()&&n<=100){const suffix='_'+n++;name=base.slice(0,32-suffix.length)+suffix}
  if(used.has(name)&&name!==current.toLowerCase())throw Error('No available emoji name');
@@ -61,6 +61,7 @@ export async function organizeVisualEmojis(guild,{maxScans=8}={}){
   let scans=0;
   for(const emoji of emojis){
    const record=guildDb[emoji.id];
+   if(!process.env.GEMINI_API_KEY){report.remaining++;break;}
    if(classificationAction(emoji,record)==='skip'){report.skipped++;continue}
    if(scans>=maxScans){report.remaining++;continue}
    scans++;
@@ -69,13 +70,14 @@ export async function organizeVisualEmojis(guild,{maxScans=8}={}){
     if(result.category==='unknown'||result.confidence<0.88||!result.subject){
      guildDb[emoji.id]={status:'review',name:emoji.name,classification:result,at:Date.now()};report.review++;await save();continue;
     }
-    const target=uniqueEmojiName(result.category,result.subject,used,emoji.name);
+    const previousName=emoji.name;
+    const target=uniqueEmojiName(result.category,result.subject,used,previousName);
     if(target!==emoji.name){
-     const oldName=emoji.name.toLowerCase();
+     const oldName=previousName.toLowerCase();
      await emoji.edit({name:target,reason:'Owner-approved image-based emoji classification'});
      used.delete(oldName);used.add(target);report.renamed++;
     }else report.verified++;
-    guildDb[emoji.id]={status:'verified',name:target,previous:emoji.name,classification:result,at:Date.now()};
+    guildDb[emoji.id]={status:'verified',name:target,previous:previousName,classification:result,at:Date.now()};
     await save();
    }catch(e){
     report.errors++;console.error('Visual emoji '+emoji.id+':',e.message);
