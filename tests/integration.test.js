@@ -256,6 +256,46 @@ test('emoji reactions avoid distress, private channels, and concurrent repeat re
   assert.equal(publicSocialChannel({ ...channel, type: ChannelType.PrivateThread }), false);
 });
 
+test('Tee can request a playful roast of Mitsuto by mention, and the roast switch still applies', async (t) => {
+  const { friendRoastTarget } = await import('../src/social-persona.js');
+  for (const name of ['Tee', 'Shug', 'Mitsuto', 'Megu', 'Dante', 'Kiz']) {
+    assert.equal(friendRoastTarget('roast ' + name)?.name, name);
+  }
+  assert.equal(friendRoastTarget('roast Gracie for Tee'), null);
+  assert.equal(friendRoastTarget('do not roast Tee'), null);
+  const prompts = [];
+  t.mock.method(globalThis, 'fetch', async (_url, options) => {
+    prompts.push(JSON.parse(options.body).contents[0].parts[0].text);
+    return responses();
+  });
+  const guild = { id: LUMIVIBE_GUILD_ID, ownerId: 'owner', roles: { everyone: {} } };
+  const message = {
+    guild,
+    guildId: guild.id,
+    channelId: 'friend-roasts',
+    channel: { guild },
+    author: { id: 'tee', username: 'Tee' },
+    mentions: {
+      users: new Map([
+        ['99', { id: '99' }],
+        ['1495189750162657400', { id: '1495189750162657400', username: 'Mitsuto' }],
+      ]),
+    },
+    content: '<@99> make fun of <@1495189750162657400> for me',
+    reply: async ({ allowedMentions }) => assert.deepEqual(allowedMentions, { parse: [], repliedUser: false }),
+  };
+  await setSetting(guild.id, 'roasts', true);
+  await handleDirectChat(message, '99');
+  assert.match(prompts[0], /roast directed at Mitsuto only/i);
+  await setMemberMuted(guild.id, '1495189750162657400', true);
+  await handleDirectChat(message, '99');
+  assert.equal(prompts.length, 1);
+  await setMemberMuted(guild.id, '1495189750162657400', false);
+  await setSetting(guild.id, 'roasts', false);
+  await handleDirectChat(message, '99');
+  assert.match(prompts[1], /Roasts are disabled/);
+});
+
 test('Diva Court responds once using the deferred interaction, including on provider failure', async (t) => {
   process.env.GEMINI_API_KEY = 'fake-test-key';
   const fetchMock = t.mock.method(globalThis, 'fetch', async () => responses());

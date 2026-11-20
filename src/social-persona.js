@@ -38,3 +38,37 @@ export function playfulActivity(text) {
     return 'INTERACTIVE MINI-GAME: Give the group ONE fun, opt-in, harmless chat challenge or question. Avoid pressure, personal disclosures, or pinging members.\n';
   return '';
 }
+
+const roastFriends = [
+  { name: 'Tee', aliases: ['tee'] },
+  { name: 'Shug', aliases: ['shug'] },
+  { name: 'Mitsuto', id: '1495189750162657400', aliases: ['mitsuto', 'mits'] },
+  { name: 'Megu', id: '237586130038423552', aliases: ['megu', 'megumin'] },
+  { name: 'Dante', id: '1272841728952369172', aliases: ['dante'] },
+  { name: 'Kiz', id: '224399760616980481', aliases: ['kiz'] },
+];
+
+const roastRequest =
+  /^(?:(?:please|can you|could you|would you|will you|just|girl)[\s,]+)*(?:roast|make fun of|tease|drag|insult|clown on)\s+(?:@?(?<name>[a-z][a-z0-9_]*)(?![a-z0-9_])|<@!?(?<id>\d+)>)/i;
+
+export function friendRoastTarget(prompt, mentions, members) {
+  const { id, name } = roastRequest.exec(prompt)?.groups || {};
+  if (!id && !name) return null;
+  const user = id ? mentions?.get(id) : null;
+  const labels = id
+    ? [members?.get(id)?.displayName, user?.globalName, user?.username].map(normalize)
+    : [normalize(name)];
+  const friend =
+    (id && roastFriends.find((entry) => entry.id === id)) ||
+    roastFriends.find((entry) => (!id || !entry.id) && entry.aliases.some((alias) => labels.includes(alias)));
+  if (!friend) return null;
+  const member =
+    !id && !friend.id
+      ? members?.find?.((candidate) =>
+          [candidate.displayName, candidate.user?.username, candidate.user?.globalName]
+            .map(normalize)
+            .some((label) => friend.aliases.includes(label)),
+        )
+      : null;
+  return { name: friend.name, id: id || friend.id || member?.id };
+}
