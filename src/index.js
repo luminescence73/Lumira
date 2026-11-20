@@ -8,7 +8,7 @@ import {loadEvents,schedule,upcoming,dueEvents} from './events.js';
 import {loadPlayground,gameCard,vote,leaderboard,award,recentAwards} from './playground.js';
 import {renderCard,studioBoard,generateImage} from './visual.js';
 import {loadFeatures,settings,setSetting,getEgo,setEgo,clearEgo,scrapbookAllowed,setScrapbookOptOut,channelAllowed,excludedChannels,setChannelAllowed,memberMuted,setMemberMuted,personality,setPersonality} from './features.js';
-import {loadLore,jokes,moments,addJoke,deleteJoke,addMoment,deleteMoment,removeAuthorMoments,removeMessageMoment} from './lore.js';
+import {loadLore,jokes,moments,addJoke,deleteJoke,addMoment,deleteMoment,removeAuthorMoments,removeMessageMoment,histories,addHistory,deleteHistory} from './lore.js';
 import { loadMemories, memoryStatus, enableMemory, saveMemory, removeMemory, disableMemory } from './memory.js';
 import { Client, GatewayIntentBits, Events, MessageFlags, PermissionFlagsBits, SlashCommandBuilder, Partials, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 const token=process.env.DISCORD_TOKEN;
@@ -194,6 +194,10 @@ client.once(Events.ClientReady,async c=>{
  .addSubcommand(s=>s.setName('list').setDescription('View saved inside jokes'))
  .addSubcommand(s=>s.setName('add').setDescription('Moderator: approve an inside joke').addStringOption(o=>o.setName('joke').setDescription('Shared joke or reference').setRequired(true).setMaxLength(240)))
  .addSubcommand(s=>s.setName('remove').setDescription('Moderator: remove an inside joke').addIntegerOption(o=>o.setName('number').setDescription('Entry number').setRequired(true).setMinValue(1))).toJSON();
+ const historyCommand=new SlashCommandBuilder().setName('lumira-history').setDescription('Owner and moderators: manage LumiVibe history and lore')
+ .addSubcommand(s=>s.setName('add').setDescription('Save an approved piece of server history').addStringOption(o=>o.setName('story').setDescription('History, event, or lore (max 1500 characters)').setRequired(true).setMaxLength(1500)))
+ .addSubcommand(s=>s.setName('list').setDescription('Read saved server history'))
+ .addSubcommand(s=>s.setName('remove').setDescription('Remove a history entry').addIntegerOption(o=>o.setName('number').setDescription('Entry number').setRequired(true).setMinValue(1))).toJSON();
  const scrapbookCommand=new SlashCommandBuilder().setName('lumira-scrapbook').setDescription('Save and browse memorable public posts')
  .addSubcommand(s=>s.setName('save').setDescription('Save a public message by its link').addStringOption(o=>o.setName('link').setDescription('Discord message link').setRequired(true)))
  .addSubcommand(s=>s.setName('list').setDescription('Browse saved moments'))
