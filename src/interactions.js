@@ -1,3 +1,4 @@
+import { socialLoreCommand } from './social-lore-commands.js';
 import { copyExpressionCommand } from './expression-copy.js';
 import { egoCommand, memoryCommand, privacyCommand, profileCommand } from './member-commands.js';
 import { MessageFlags } from 'discord.js';
@@ -18,6 +19,7 @@ import {
 
 const commands = new Map([
   ['lumira', chatCommand],
+  ['lumira-lorebook', socialLoreCommand],
   ['lumira-admin', adminCommand],
   ['lumira-copy', copyExpressionCommand],
   ['lumira-channels', channelsCommand],
