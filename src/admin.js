@@ -282,3 +282,38 @@ export async function repairControlFormattingOnce(guild){
  }
  s.controlFormattingVersion=1;await save();return {alreadyDone:false,report};
 }
+
+const emojiPrefixes=['pika','sxs','anime','animal','meme','cute','text'];
+const emojiSubjectRules=[
+ ['pika',/(?:pikachu|pika|raichu|pichu)/i],
+ ['sxs',/(?:sxs|sword.?x.?staff|templar|dawnium)/i],
+ ['animal',/(?:cat|dog|fox|wolf|bunny|rabbit|bear|frog|hamster|otter|panda|duck|bird|cow|horse)/i],
+ ['text',/(?:text|word|letter|number|caption)/i],
+ ['meme',/(?:meme|shitpost)/i],
+ ['anime',/(?:anime|manga|naruto|onepiece|gojo|sukuna|goku|luffy)/i],
+ ['cute',/(?:cute|kawaii)/i]
+];
+export async function organizeEmojiNamesOnce(guild){
+ const s=state(guild.id);if(s.emojiSubjectNamingVersion===1)return {alreadyDone:true};
+ const emojis=[...(await guild.emojis.fetch()).values()];
+ const used=new Set(emojis.map(e=>e.name.toLowerCase()));
+ const report={renamed:[],skipped:[]};
+ for(const emoji of emojis){
+  const original=emoji.name;
+  if(emojiPrefixes.some(p=>original.toLowerCase().startsWith(p+'_')))continue;
+  const match=emojiSubjectRules.find(([,re])=>re.test(original));
+  if(!match){report.skipped.push(original);continue}
+  const prefix=match[0];
+  let suffix=original.toLowerCase().replace(/[^a-z0-9_]+/g,'_').replace(/^_+|_+$/g,'').replace(new RegExp('^'+prefix+'_?'),'');
+  suffix=suffix.replace(/^_+/,'')||'emoji';
+  let target=(prefix+'_'+suffix).slice(0,32);
+  if(target===original.toLowerCase())continue;
+  if(used.has(target)){report.skipped.push(original+' (name collision)');continue}
+  try{await emoji.edit({name:target,reason:'Owner-approved LumiVibe subject-based emoji naming'});used.add(target);report.renamed.push(original+' → '+target)}
+  catch(e){report.skipped.push(original+' ('+e.message+')')}
+ }
+ // Only mark complete if Discord allowed us to inspect the full list; unknown subjects remain untouched.
+ s.emojiSubjectNamingVersion=1;await save();
+ console.log('LumiVibe emoji subject naming:',JSON.stringify(report));
+ return {renamed:report.renamed.length,unclassified:report.skipped.length};
+}
