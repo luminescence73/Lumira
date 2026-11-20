@@ -52,6 +52,30 @@ const roastRequest =
   /^(?:(?:please|can you|could you|would you|will you|just|girl)[\s,]+)*(?:roast|make fun of|tease|drag|insult|clown on)\s+(?:@?(?<name>[a-z][a-z0-9_]*)(?![a-z0-9_])|<@!?(?<id>\d+)>)/i;
 
 export function friendRoastTarget(prompt, mentions, members) {
+  return findBanterTarget(prompt, mentions, members, roastFriends);
+}
+
+export function gentleTeaseTarget(prompt, mentions, members, requester, ownerId) {
+  if (
+    requester.userId === ownerId ||
+    !roastFriends.some((friend) =>
+      friend.id
+        ? friend.id === requester.userId
+        : [requester.displayName, requester.username]
+            .map(normalize)
+            .some((label) => friend.aliases.includes(label)),
+    )
+  )
+    return null;
+
+  return findBanterTarget(prompt, mentions, members, [
+    { name: 'Lumi', id: ownerId, aliases: ['lumi', 'luminescence73'] },
+    { name: 'Gracie', aliases: ['gracie', 'bgracie'] },
+    { name: 'Moonie', aliases: ['moonie', 'moony', 'meatshieldmoonie'] },
+  ]);
+}
+
+function findBanterTarget(prompt, mentions, members, eligible) {
   const { id, name } = roastRequest.exec(prompt)?.groups || {};
   if (!id && !name) return null;
   const user = id ? mentions?.get(id) : null;
@@ -59,8 +83,8 @@ export function friendRoastTarget(prompt, mentions, members) {
     ? [members?.get(id)?.displayName, user?.globalName, user?.username].map(normalize)
     : [normalize(name)];
   const friend =
-    (id && roastFriends.find((entry) => entry.id === id)) ||
-    roastFriends.find((entry) => (!id || !entry.id) && entry.aliases.some((alias) => labels.includes(alias)));
+    (id && eligible.find((entry) => entry.id === id)) ||
+    eligible.find((entry) => (!id || !entry.id) && entry.aliases.some((alias) => labels.includes(alias)));
   if (!friend) return null;
   const member =
     !id && !friend.id

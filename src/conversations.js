@@ -5,7 +5,7 @@ import { channelAllowed, getEgo, memberMuted, personality, settings } from './fe
 import { histories, jokes } from './lore.js';
 import { lumiVibeCanonContext } from './lumivibe-canon.js';
 import { memoryStatus } from './memory.js';
-import { friendRoastTarget, playfulActivity, socialDirection } from './social-persona.js';
+import { friendRoastTarget, gentleTeaseTarget, playfulActivity, socialDirection } from './social-persona.js';
 
 const conversations = new Map();
 const pending = new Map();
@@ -134,19 +134,37 @@ async function answerChat({ target, user, prompt, deliver, message, member }) {
     const roastRules = roasts
       ? 'Roast only with clear permission from the target. Tease established friends lightly when the context welcomes it. Keep jokes away from private details or sensitive traits.\n'
       : 'Roasts are disabled in this server. Give only gentle, friendly banter, even if asked to roast someone.\n';
-    const friend =
+    const mentions = message?.mentions.users;
+    const members = guild.members?.cache;
+    const gentle =
       guildId === LUMIVIBE_GUILD_ID
-        ? friendRoastTarget(prompt, message?.mentions.users, guild.members?.cache)
+        ? gentleTeaseTarget(
+            prompt,
+            mentions,
+            members,
+            {
+              userId: user.id,
+              username: user.username,
+              displayName: member?.displayName,
+            },
+            guild.ownerId,
+          )
         : null;
+    const friend = gentle || (guildId === LUMIVIBE_GUILD_ID ? friendRoastTarget(prompt, mentions, members) : null);
     const approvedRoast = roasts && friend && (!friend.id || !memberMuted(guildId, friend.id));
     if (roasts && friend && !approvedRoast) return false;
-    const friendPrompt = approvedRoast
-      ? 'LUMIVIBE FRIEND ROAST: ' +
-        friend.name +
-        ' is on the server’s friendly banter list. Give one playful diva-style roast directed at ' +
-        friend.name +
-        ' only. Use silly exaggeration or an innocuous gaming joke. Deliver the joke immediately without asking for permission or referencing rules. Avoid real insecurities and sensitive traits. Use a plain name with no ping. Maximum 220 characters.'
-      : null;
+    let friendPrompt;
+    if (approvedRoast) {
+      friendPrompt = gentle
+        ? 'LUMIVIBE GIRLS’ GIRL TEASING: An approved friend requested a playful tease of ' +
+          friend.name +
+          '. Give one affectionate, silly line that she could laugh along with. Give her a little hype or end with a warm wink. Make the joke about a fictional low-stakes situation. Keep the punchline playful even if the requester wanted a harsh roast. Avoid pile-ons, real insecurities, appearance, sensitive traits, private details, name-calling and pings. Deliver the joke immediately. Maximum 220 characters.'
+        : 'LUMIVIBE FRIEND ROAST: ' +
+          friend.name +
+          ' is on the server’s friendly banter list. Give one playful diva-style roast directed at ' +
+          friend.name +
+          ' only. Use silly exaggeration or an innocuous gaming joke. Deliver the joke immediately without asking for permission or referencing rules. Avoid real insecurities and sensitive traits. Use a plain name with no ping. Maximum 220 characters.';
+    }
     const input =
       friendPrompt ||
       roastRules +

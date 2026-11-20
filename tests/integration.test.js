@@ -296,6 +296,51 @@ test('Tee can request a playful roast of Mitsuto by mention, and the roast switc
   assert.match(prompts[1], /Roasts are disabled/);
 });
 
+test('the boys can request affectionate teasing of Lumi, Gracie, and Moonie without changing other roast rules', async (t) => {
+  const { gentleTeaseTarget } = await import('../src/social-persona.js');
+  const tee = { userId: 'tee', username: 'Tee' };
+  const ownerId = 'lumi-id';
+  for (const name of ['Lumi', 'Gracie', 'Moonie']) {
+    assert.equal(gentleTeaseTarget('tease ' + name, null, null, tee, ownerId)?.name, name);
+  }
+  assert.equal(gentleTeaseTarget('tease <@lumi-id>', null, null, tee, ownerId), null);
+  assert.equal(gentleTeaseTarget('tease <@123>', null, null, tee, '123')?.name, 'Lumi');
+  assert.equal(
+    gentleTeaseTarget('tease <@456>', new Map([['456', { username: 'Gracie' }]]), null, tee, ownerId)?.name,
+    'Gracie',
+  );
+  assert.equal(
+    gentleTeaseTarget('tease Lumi', null, null, { userId: 'stranger', username: 'Stranger' }, ownerId),
+    null,
+  );
+  const prompts = [];
+  t.mock.method(globalThis, 'fetch', async (_url, options) => {
+    prompts.push(JSON.parse(options.body).contents[0].parts[0].text);
+    return responses();
+  });
+  const guild = { id: LUMIVIBE_GUILD_ID, ownerId, roles: { everyone: {} } };
+  const message = {
+    guild,
+    guildId: guild.id,
+    channelId: 'gentle-tease',
+    channel: { guild },
+    author: { id: tee.userId, username: tee.username },
+    mentions: { users: new Map() },
+    content: 'Lumira make fun of Lumi for me',
+    reply: async ({ allowedMentions }) => assert.deepEqual(allowedMentions, { parse: [], repliedUser: false }),
+  };
+  await setSetting(guild.id, 'roasts', true);
+  await handleDirectChat(message, '99');
+  assert.match(prompts[0], /GIRLS’ GIRL TEASING/);
+  await setMemberMuted(guild.id, ownerId, true);
+  await handleDirectChat(message, '99');
+  assert.equal(prompts.length, 1);
+  await setMemberMuted(guild.id, ownerId, false);
+  await setSetting(guild.id, 'roasts', false);
+  await handleDirectChat(message, '99');
+  assert.match(prompts[1], /Roasts are disabled/);
+});
+
 test('Diva Court responds once using the deferred interaction, including on provider failure', async (t) => {
   process.env.GEMINI_API_KEY = 'fake-test-key';
   const fetchMock = t.mock.method(globalThis, 'fetch', async () => responses());
