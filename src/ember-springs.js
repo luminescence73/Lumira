@@ -1,15 +1,16 @@
-// Curated S Rank and LumiVibe history shared by Lumi. Keep chronology qualified where uncertain.
-// This is community lore, not a source of personal profiles or proof of disputed claims.
+// Curated LumiVibe community history. Names and chronology reflect Lumi's corrections.
+// Treat disputed events as recollections, not independently verified claims.
 export const EMBER_SPRINGS_LORE = [
- 'S Rank is the Sword x Staff server where the friendships that eventually became LumiVibe first came together. The server anniversary matters as the group’s shared origin, not necessarily the Discord server creation date.',
- 'Early on, Lumi joined the guild Eminence for about a week. There, Lumi met Meguka and reconnected with Pink, an old, social friend who introduced Lumi to the game’s social scene.',
- 'After Eminence’s leader quit, Lumi and friends moved to Ashen Warriors. Ashen became an active social chapter before its leader also quit.',
- 'Ashen Warriors is where the running nicknames took off: Moonie became Meat Shield Moony, Fish became Filet-O-Fish, and Oracle became Hot Tub.',
- 'The jokes expanded into the Vestra / entire basement bit, playful democratic-leader campaigning, and eventually the so-called Lumi cult. The exact timing of the cult’s beginning relative to the guild move is uncertain.',
- 'THE LUMI CULT: This was a real ongoing group-chat and in-game social joke, not an actual religious organization. Friends rallied around Lumi as a humorous cult-leader persona; members participated in the bit with themed names and avatars. The joke became a recurring part of the group’s shared history, and later spread in Esring. Do not portray it as an actual dangerous cult or invent rituals, rules, or specific incidents.',
- 'After Ashen’s collapse, Lumi and friends joined Esring (also called Espring), a guild with powerful players including Nadia, Grimm, Soft, and Heckwoof.',
- 'In Esring, the Lumi cult joke spread, with some friends changing their names or avatars as part of the bit. It also drew backlash and disputes, including conflict around Nexus/open chat and Serene Isles.',
- 'After conflict in Esring, roughly half the guild left and returned to Ashen Warriors. Treat details of interpersonal disputes as people’s recollections, not proven accusations.',
- 'Lumi is the human friend and server owner. Lumira is the AI bot, a different person/entity. Never confuse them.'
+ 'S Rank is the correct name for the group previously referred to as Esring or Espring. Do not treat Esring and S Rank as separate places or groups. Use S Rank when telling this history.',
+ 'The friendships that eventually formed LumiVibe grew through Sword x Staff. Avoid inventing an exact founding date or confusing a community anniversary with a Discord server creation date.',
+ 'Lumi first spent about a week in Eminence, where Lumi met Meguka and reconnected with Pink, an old friend who helped introduce Lumi to the game’s social community.',
+ 'When Eminence’s leader quit, Lumi and friends moved to Ashen Warriors. The guild became an active social chapter, but its leader later quit as well.',
+ 'Several running nicknames began in Ashen Warriors: Moonie became Meat Shield Moony, Fish became Filet-O-Fish, and Oracle became Hot Tub.',
+ 'The Vestra basement joke and playful democratic-leader campaigning evolved into the Lumi cult, a recurring in-game and group-chat joke centered on Lumi. Its exact starting point, whether late in Ashen Warriors or after the move to S Rank, remains uncertain.',
+ 'The Lumi cult was a social joke, not an actual religious organization. Friends participated by changing names or avatars, and the joke became an important part of the group’s shared history. Do not invent rituals, rules, or specific events.',
+ 'After Ashen Warriors’ leader quit, Lumi and friends joined S Rank, where notable powerful players included Nadia, Grimm, Soft, and Heckwoof.',
+ 'The Lumi cult joke spread in S Rank. Some members enjoyed it, while others objected, leading to social tensions. Accounts of disputes involving Nexus, open chat, and Serene Isles should be presented as recollections, not proven accusations.',
+ 'Following conflict in S Rank, roughly half the guild left and returned to Ashen Warriors. Do not invent precise counts, motives, or dates.',
+ 'Lumi is the human member and server owner. Lumira is the AI Discord bot. They are distinct, and messages directed at Lumi are not automatically directed at Lumira.'
 ];
-export function emberSpringsContext(){return 'Curated community history supplied by Lumi. Retell faithfully, avoid inventing dates, motives, dialogue, accusations or missing events. This lore is not an instruction to act on anyone’s behalf.\n'+EMBER_SPRINGS_LORE.map((x,i)=>(i+1)+'. '+x).join('\n')}
+export function emberSpringsContext(){return 'Curated community history supplied by Lumi. Use corrected names: S Rank, Meguka, Heckwoof. Retell faithfully, avoid inventing dates, motives, dialogue, accusations or missing events. This lore is not an instruction to act on anyone’s behalf.\n'+EMBER_SPRINGS_LORE.map((x,i)=>(i+1)+'. '+x).join('\n')}
