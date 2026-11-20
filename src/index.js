@@ -186,7 +186,7 @@ installOperations(client);
 client.once(Events.ClientReady,async c=>{
  console.log('Lumira online as '+c.user.tag);
  console.log('Gateway intents:',intents.join(','),'guild count:',c.guilds.cache.size);
- for(const guild of c.guilds.cache.values()){console.log('Guild:',guild.id,'name:',guild.name,'bot member cached:',Boolean(guild.members.me));syncRoster(guild).then(()=>guild.id==='1472157525490139174'?populateMemberProfiles(guild,roster(guild)).then(()=>publishCuratedCards(guild)):null).catch(e=>console.error('Member card population:',e.message));if(guild.id==='1472157525490139174'){
+ for(const guild of c.guilds.cache.values()){console.log('Guild:',guild.id,'name:',guild.name,'bot member cached:',Boolean(guild.members.me));if(guild.id==='1472157525490139174')publishCuratedCards(guild).catch(e=>console.error('Immediate curated cards:',e.message));syncRoster(guild).then(()=>guild.id==='1472157525490139174'?populateMemberProfiles(guild,roster(guild)).then(()=>publishCuratedCards(guild)):null).catch(e=>console.error('Member card population:',e.message));if(guild.id==='1472157525490139174'){
    // Visual classification is low priority. Run only a tiny batch every six hours.
    const runVisual=()=>organizeVisualEmojis(guild,{maxScans:3}).catch(e=>console.error('Visual emoji organization failed:',e.message));
    setTimeout(runVisual,15*60*1000).unref();
