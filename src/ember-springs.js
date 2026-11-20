@@ -5,7 +5,7 @@ export const EMBER_SPRINGS_LORE = [
  'The friendships that eventually formed LumiVibe grew through Sword x Staff. Avoid inventing an exact founding date or confusing a community anniversary with a Discord server creation date.',
  'Lumi first spent about a week in Eminence, where Lumi met Meguka and reconnected with Pink, an old friend who helped introduce Lumi to the game’s social community.',
  'When Eminence’s leader quit, Lumi and friends moved to Ashen Warriors. The guild became an active social chapter, but its leader later quit as well.',
- 'Several running nicknames began in Ashen Warriors: Moonie became Meat Shield Moony, Fish became Filet-O-Fish, and Oracle became Hot Tub.',
+ 'Several running nicknames in the friend group include Meat Shield Moony for Moonie, Filet-O-Fish for Fish, and Hot Tub for Oracle. Oracle does not play Sword x Staff and is not in Ashen Warriors; Dante is also not currently in Ashen Warriors.',
  'The Vestra basement joke and playful democratic-leader campaigning evolved into the Lumi cult, a recurring in-game and group-chat joke centered on Lumi. Its exact starting point, whether late in Ashen Warriors or after the move to S Rank, remains uncertain.',
  'The Lumi cult was a social joke, not an actual religious organization. Friends participated by changing names or avatars, and the joke became an important part of the group’s shared history. Do not invent rituals, rules, or specific events.',
  'After Ashen Warriors’ leader quit, Lumi and friends joined S Rank, where notable powerful players included Nadia, Grimm, Soft, and Heckwoof.',
