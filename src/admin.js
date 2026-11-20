@@ -350,3 +350,33 @@ export async function refreshLiveboard(guild){
  s.liveboardMessageId=msg.id;await save();
  return {messageId:msg.id,updated:!!msg};
 }
+
+export async function authorizeGracieStickerImportOnce(guild){
+ const s=state(guild.id);
+ if(s.gracieStickerAuthorizationVersion===1)return {alreadyDone:true};
+ // Match the member's Discord identity, not arbitrary references in channel names.
+ const members=await guild.members.fetch({limit:0}).catch(()=>guild.members.cache);
+ const matches=[...members.values()].filter(m=>!m.user.bot&&[m.user.username,m.user.globalName,m.displayName].some(n=>/^gracie(?:[ _.-].*)?$/i.test(n||'')));
+ if(matches.length!==1){console.warn('Gracie sticker access not assigned: matching members:',matches.length);return {assigned:false,matches:matches.length}}
+ const id=matches[0].id;
+ s.stickerManagers=[...new Set([...(s.stickerManagers||[]),id])];
+ s.gracieStickerAuthorizationVersion=1;await save();
+ return {assigned:true,memberId:id};
+}
+export async function refreshStickerDirectory(guild){
+ const s=state(guild.id);
+ const cat=guild.channels.cache.find(c=>c.type===ChannelType.GuildCategory&&norm(c.name)===norm('✦ LUMIRA CONTROL'));
+ const channel=guild.channels.cache.find(c=>c.type===ChannelType.GuildText&&c.parentId===cat?.id&&norm(c.name)==='liveboard');
+ if(!channel)throw Error('Liveboard missing');
+ const stickers=[...(await guild.stickers.fetch()).values()].sort((a,b)=>a.name.localeCompare(b.name));
+ const chunks=[];
+ let current='🧸 **LumiVibe Sticker Collection**\nAlphabetized inventory. Existing stickers are preserved.\n';
+ for(const st of stickers){const line='• '+st.name+'  (ID: '+st.id+')\n';if(current.length+line.length>1700){chunks.push(current);current='**Stickers, continued**\n'}current+=line}
+ chunks.push(current+(stickers.length?'':'No stickers uploaded yet.'));
+ // Only post once per count, avoiding duplicate inventory spam.
+ const key=stickers.map(s=>s.id+':'+s.name).join('|');
+ if(s.stickerDirectoryKey===key)return {unchanged:true,count:stickers.length};
+ for(const part of chunks)await channel.send({content:part,allowedMentions:{parse:[]}});
+ s.stickerDirectoryKey=key;await save();
+ return {count:stickers.length,messages:chunks.length};
+}
