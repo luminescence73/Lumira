@@ -8,6 +8,7 @@ const spontaneousChannels=new Set((process.env.LUMIRA_SPONTANEOUS_CHANNEL_IDS||'
 const intents=[GatewayIntentBits.Guilds];
 intents.push(GatewayIntentBits.GuildMessages,GatewayIntentBits.MessageContent);
 const client=new Client({intents});
+client.on('raw',packet=>{if(packet.t==='MESSAGE_CREATE')console.log('Gateway MESSAGE_CREATE received; guild:',Boolean(packet.d?.guild_id),'mentions bot:',Array.isArray(packet.d?.mentions)&&packet.d.mentions.some(u=>u.id===client.user?.id),'content present:',Boolean(packet.d?.content))});
 const recentMessages=new Map();
 const lastSpoke=new Map();
 const lastEvaluated=new Map();
@@ -47,6 +48,8 @@ function permitted(channelId){return allowed.size===0||allowed.has(channelId)}
 function canRespond(userId){const now=Date.now();if(now-(cooldown.get(userId)||0)<12000)return false;cooldown.set(userId,now);return true}
 client.once(Events.ClientReady,async c=>{
  console.log('Lumira online as '+c.user.tag);
+ console.log('Gateway intents:',intents.join(','),'guild count:',c.guilds.cache.size);
+ for(const guild of c.guilds.cache.values()){console.log('Guild:',guild.id,'name:',guild.name,'bot member cached:',Boolean(guild.members.me));}
  if(process.env.GEMINI_API_KEY){try{const answer=await replyTo('Reply with one short friendly greeting.');console.log('Gemini startup self-test succeeded; response length:',answer.length)}catch(error){console.error('Gemini startup self-test failed:',error.message)}}
  const forgetCommand=new SlashCommandBuilder().setName('lumira-forget').setDescription('Clear your recent Lumira conversation in this channel').toJSON();
  try {
@@ -72,6 +75,7 @@ client.on(Events.MessageCreate,async message=>{
  if(!message.inGuild()||message.author.bot||message.webhookId||!client.user)return;
  const mentioned=message.mentions.users.has(client.user.id)||new RegExp('<@!?'+client.user.id+'>').test(message.content||'');
  if(!mentioned)return;
+ console.log('Direct mention matched:',message.channelId);
  console.log('Lumira mention received; channel:',message.channelId,'content length:',message.content?.length||0,'permitted:',permitted(message.channelId));
  if(!permitted(message.channelId)){await message.reply({content:'I cannot chat in this channel yet. 💙',allowedMentions:{parse:[]}}).catch(error=>console.error('Mention permission notice failed:',error.message));return}
  const prompt=(message.content||'').replace(new RegExp('<@!?'+client.user.id+'>','g'),'').trim();
