@@ -1,7 +1,7 @@
 import { jsonStore } from './json-store.js';
 const store=jsonStore('social-lore.json');
 let db={};
-const norm=s=>String(s||'').trim().replace(/\\s+/g,' ');
+const norm=s=>String(s||'').trim().replace(/\s+/g,' ');
 const state=g=>db[g]||(db[g]={entries:[],requests:[]});
 export async function loadSocialLore(){db=await store.load()}
 export function loreEntries(g,{term='',kind='',memberId=''}={}){
@@ -9,7 +9,7 @@ export function loreEntries(g,{term='',kind='',memberId=''}={}){
  return state(g).entries.filter(e=>(!kind||e.kind===kind)&&(!memberId||e.members.includes(memberId))&&(!q||(e.title+' '+e.text).toLowerCase().includes(q))).slice(-30).reverse();
 }
 export function socialLoreContext(g,memberId){
- return loreEntries(g,{memberId}).slice(0,4).map(e=>e.kind+': '+e.title+' — '+e.text.slice(0,180)).join('\\n');
+ return loreEntries(g,{memberId}).slice(0,4).map(e=>e.kind+': '+e.title+' — '+e.text.slice(0,180)).join('\n');
 }
 export async function proposeLore(g,{kind,title,text,author,members=[]}){
  if(!['joke','bond','moment'].includes(kind))throw Error('Unknown lore type');
