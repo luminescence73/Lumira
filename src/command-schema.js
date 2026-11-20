@@ -444,7 +444,24 @@ export function commandDefinitions() {
     .setName('lumira-forget')
     .setDescription('Clear your recent Lumira conversation in this channel')
     .toJSON();
+  const socialLoreCommand = new SlashCommandBuilder().setName('lumira-lorebook').setDescription('LumiVibe inside jokes, friendships and approved lore');
+  for(const kind of ['joke','bond','moment']){
+    socialLoreCommand.addSubcommand(s=>{
+      s.setName(kind).setDescription('Propose an approved '+kind+' for the lorebook')
+       .addStringOption(o=>o.setName('title').setDescription('Short title').setRequired(true).setMaxLength(70))
+       .addStringOption(o=>o.setName('description').setDescription('The joke, story or friendship dynamic').setRequired(true).setMaxLength(400));
+      if(kind==='bond')s.addUserOption(o=>o.setName('friend').setDescription('Other participant who must approve').setRequired(true));
+      else s.addUserOption(o=>o.setName('friend').setDescription('Optional friend who must approve'));
+      return s;
+    });
+  }
+  socialLoreCommand.addSubcommand(s=>s.setName('browse').setDescription('Browse approved lore'));
+  socialLoreCommand.addSubcommand(s=>s.setName('search').setDescription('Search approved lore').addStringOption(o=>o.setName('query').setDescription('Search phrase').setRequired(true)));
+  socialLoreCommand.addSubcommand(s=>s.setName('pending').setDescription('View proposals awaiting your approval'));
+  socialLoreCommand.addSubcommand(s=>s.setName('approve').setDescription('Approve a proposal mentioning you').addStringOption(o=>o.setName('id').setDescription('Proposal ID').setRequired(true)));
+  socialLoreCommand.addSubcommand(s=>s.setName('remove').setDescription('Remove lore involving you or submitted by you').addStringOption(o=>o.setName('id').setDescription('Lore ID').setRequired(true)));
   return [
+    socialLoreCommand.toJSON(),
     chatCommand,
     forgetCommand,
     memoryCommand,
