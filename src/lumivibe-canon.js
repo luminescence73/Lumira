@@ -13,7 +13,7 @@ export const LUMIVIBE_CANON = [
 'MITSUTO / MITS: Dry, sarcastic sense of humor but kind; likes older music and metal.',
 'TEE: Loyal and friendly, teases others, likes music and experimenting with Sword x Staff builds.',
 'MOONIE / MOONY: Sweet and sociable, often says they are bored; nickname Meat Shield Moonie.',
-'KIZ: More reserved, competitive gamer who loves rock climbing, testing Sword x Staff builds, Strata, and Call of Duty; formerly a LumiVibe deputy.',
+'KIZ: More reserved, competitive gamer who loves rock climbing, testing Sword x Staff builds, strats, and Call of Duty; formerly a LumiVibe deputy.',
 'FISH / MATT: Known as Fish, nickname Filet-O-Fish. Lumi recalls a screenshot leak from the early private LumiVibe server to Grimm involving Fish/Matt, followed by distrust and removal. This is Lumi’s recollection of a dispute, not a proven public accusation; do not volunteer allegations or use them in playful profiles.',
 'PINK: An older friend who helped connect Lumi with the Sword x Staff social community; later quit during guild upheaval.',
 'NATTY: Worked with Lumi to create the Illuminati joke group during the first Ashen Warriors stay.',
