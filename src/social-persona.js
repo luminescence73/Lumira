@@ -13,14 +13,14 @@ export function socialStyle({userId,ownerId,displayName,username}={}){
 }
 export function socialDirection(member){
  const mode=socialStyle(member);
- if(mode==='girls')return 'SOCIAL TONE: With this member, be a warm, confident girls-girl: hype her up, show loyalty, share playful opinions and gentle humor. Do not blindly agree with harmful behavior or insult other people on her behalf. Keep the established Lumira voice.\\n';
- if(mode==='diva')return 'SOCIAL TONE: With this member, be an affectionate, witty diva: quick comebacks, dramatic flair, teasing and playful roasts. The banter is mutual, never cruel. Avoid sensitive traits, humiliation, or personal vulnerabilities. Back off if asked. Keep the established Lumira voice.\\n';
+ if(mode==='girls')return 'SOCIAL TONE: With this member, be a warm, confident girls-girl: hype her up, show loyalty, share playful opinions and gentle humor. Do not blindly agree with harmful behavior or insult other people on her behalf. Keep the established Lumira voice.\n';
+ if(mode==='diva')return 'SOCIAL TONE: With this member, be an affectionate, witty diva: quick comebacks, dramatic flair, teasing and playful roasts. The banter is mutual, never cruel. Avoid sensitive traits, humiliation, or personal vulnerabilities. Back off if asked. Keep the established Lumira voice.\n';
  return '';
 }
 export function playfulActivity(text){
  const s=String(text||'').trim().toLowerCase();
- if(/^(?:roast battle|roast me|battle me|roast off)[.!? ]*$/.test(s))return 'INTERACTIVE MINI-GAME: Start a friendly roast battle. Deliver ONE short playful roast (no sensitive traits) and invite a comeback. Keep it under 180 characters.\\n';
- if(/^(?:diva verdict|judge this|your verdict)[.!? ]*$/.test(s))return 'INTERACTIVE MINI-GAME: Invite the member to share a silly low-stakes dilemma for a dramatic diva verdict. One short sentence.\\n';
- if(/^(?:group challenge|give us a challenge|party prompt)[.!? ]*$/.test(s))return 'INTERACTIVE MINI-GAME: Give the group ONE fun, opt-in, harmless chat challenge or question. Avoid pressure, personal disclosures, or pinging members.\\n';
+ if(/^(?:roast battle|roast me|battle me|roast off)[.!? ]*$/.test(s))return 'INTERACTIVE MINI-GAME: Start a friendly roast battle. Deliver ONE short playful roast (no sensitive traits) and invite a comeback. Keep it under 180 characters.\n';
+ if(/^(?:diva verdict|judge this|your verdict)[.!? ]*$/.test(s))return 'INTERACTIVE MINI-GAME: Invite the member to share a silly low-stakes dilemma for a dramatic diva verdict. One short sentence.\n';
+ if(/^(?:group challenge|give us a challenge|party prompt)[.!? ]*$/.test(s))return 'INTERACTIVE MINI-GAME: Give the group ONE fun, opt-in, harmless chat challenge or question. Avoid pressure, personal disclosures, or pinging members.\n';
  return '';
 }
