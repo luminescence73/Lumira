@@ -10,6 +10,7 @@ import { channelAllowed, loadFeatures } from './features.js';
 import { handleInteraction } from './interactions.js';
 import { loadLore } from './lore.js';
 import { loadMemories } from './memory.js';
+import { memberEventsAvailable } from './member-events.js';
 import { installOperations } from './operations.js';
 import { noteDirectConversation, socialReaction, spontaneousChat } from './passive-chat.js';
 import { loadPlayground } from './playground.js';
@@ -21,7 +22,7 @@ import { handleStickerChat } from './sticker-chat.js';
 const interval = (callback, time) => setInterval(callback, time).unref();
 const timeout = (callback, time) => setTimeout(callback, time).unref();
 
-export function createClient() {
+export function createClient({ memberEvents = process.env.LUMIRA_MEMBERS_INTENT === 'true' } = {}) {
   const intents = [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMessages,
@@ -30,7 +31,7 @@ export function createClient() {
     GatewayIntentBits.GuildExpressions,
     GatewayIntentBits.GuildVoiceStates,
   ];
-  if (process.env.LUMIRA_MEMBERS_INTENT === 'true') intents.push(GatewayIntentBits.GuildMembers);
+  if (memberEvents) intents.push(GatewayIntentBits.GuildMembers);
   return new Client({ intents, partials: [Partials.Message, Partials.Channel, Partials.Reaction] });
 }
 
@@ -72,7 +73,16 @@ export async function startBot({ token, client, scheduleInterval, scheduleTimeou
     loadProfiles(),
     loadAdmin(),
   ]);
-  client ??= createClient();
+  if (!client) {
+    const setting = process.env.LUMIRA_MEMBERS_INTENT;
+    const memberEvents =
+      setting !== 'false' &&
+      (await memberEventsAvailable(token, {
+        configure: setting === 'true' || process.env.RAILWAY_SERVICE_NAME === 'lumira-bot',
+      }));
+    console.log('Lumira Discord member events:', memberEvents ? 'enabled' : 'unavailable or disabled');
+    client = createClient({ memberEvents });
+  }
   installBot(client, { scheduleInterval, scheduleTimeout });
   await client.login(token);
   return client;
