@@ -19,7 +19,7 @@ export async function publishCuratedCards(guild){
  const result={published:0,updated:0,unmatched:[],ambiguous:[],errors:[]};
  for(const item of cards){
   const aliases=new Set(item.aliases.map(norm));
-  const matches=directory.filter(m=>[m.username,m.displayName,m.globalName].some(v=>aliases.has(norm(v))));
+  const matches=directory.filter(m=>[m.username,m.displayName,m.globalName].some(v=>{const n=norm(v);return aliases.has(n)||item.aliases.some(a=>a.length>=4&&new RegExp('(?:^|[^a-z0-9])'+a+'(?:$|[^a-z0-9])','i').test(String(v||'')))}));
   if(matches.length!==1){result[matches.length?'ambiguous':'unmatched'].push(item.name);continue}
   const entry=matches[0],existing=profile(guild.id,entry.id);
   // Respect members' own edited profiles. Never overwrite a member-created card.
