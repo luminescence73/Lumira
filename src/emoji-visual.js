@@ -1,6 +1,7 @@
 import {promises as fs} from 'node:fs';
 import path from 'node:path';
 import sharp from 'sharp';
+import {quotaReady,quotaDelay,isQuotaFailure} from './gemini-quota.js';
 const file=path.join(process.env.LUMIRA_DATA_DIR||'/data','emoji-visual.json');
 const allowed=['pika','sxs','anime','animal','meme','cute','text'];
 let db={};let writes=Promise.resolve();
@@ -16,11 +17,13 @@ async function classify(emoji){
  const bytes=await sharp(raw,{animated:false}).resize(128,128,{fit:'contain'}).png().toBuffer();
  const mime='image/png';
  const instructions='Identify what this Discord emoji image DEPICTS, not the emotion. Categories: pika for Pikachu/Pichu/Raichu; sxs for Sword x Staff game characters, logos or icons; anime for identifiable anime art; animal for other animals; meme for obvious meme characters/images; text for mainly written words; cute for cute designs not fitting above. Return ONLY compact JSON {"category":"pika|sxs|anime|animal|meme|cute|text|unknown","subject":"short descriptive subject in lowercase snake_case","confidence":0.0}. If unsure or blurry, use unknown. Do not guess based on the original filename.';
- const response=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+encodeURIComponent(process.env.GEMINI_MODEL||'gemini-3.5-flash-lite')+':generateContent',{
+ const model=process.env.GEMINI_MODEL||'gemini-3.5-flash-lite';
+ if(!quotaReady(model))throw Error('Gemini quota cooldown active');
+ const response=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+encodeURIComponent(model)+':generateContent',{
   method:'POST',headers:{'x-goog-api-key':key,'Content-Type':'application/json'},signal:AbortSignal.timeout(25000),
   body:JSON.stringify({contents:[{role:'user',parts:[{text:instructions},{inlineData:{mimeType:mime,data:bytes.toString('base64')}}]}],generationConfig:{temperature:0,responseMimeType:'application/json',maxOutputTokens:150}})
  });
- if(!response.ok)throw Error('Vision request '+response.status);
+ if(!response.ok){const detail=await response.text().catch(()=> '');if(isQuotaFailure(response.status,detail))quotaDelay(model,60*60*1000);throw Error('Vision request '+response.status)}
  const body=await response.json();
  const responseText=body.candidates?.[0]?.content?.parts?.map(x=>x.text||'').join('')||'';
  const data=JSON.parse(responseText);
@@ -28,7 +31,7 @@ async function classify(emoji){
  return {category:data.category,subject:cleanName(data.subject),confidence:Number(data.confidence)};
 }
 let running=false;
-export async function organizeVisualEmojis(guild){
+export async function organizeVisualEmojis(guild,{maxScans=3}={}){
  if(running)return {running:true};running=true;
  try{
   await load();
@@ -36,10 +39,13 @@ export async function organizeVisualEmojis(guild){
   const guildDb=db[guild.id]||(db[guild.id]={});
   const report={renamed:0,review:0,skipped:0,errors:0};
   const used=new Set(emojis.map(e=>e.name.toLowerCase()));
+  let scans=0;
   for(const emoji of emojis){
    const record=guildDb[emoji.id];
    if(record?.status==='renamed'||record?.status==='review')continue;
    if(allowed.some(p=>emoji.name.toLowerCase().startsWith(p+'_'))){guildDb[emoji.id]={status:'renamed',name:emoji.name};report.skipped++;continue}
+   if(scans>=maxScans)break;
+   scans++;
    try{
     const result=await classify(emoji);
     if(result.category==='unknown'||result.confidence<0.88||!result.subject){
@@ -56,7 +62,7 @@ export async function organizeVisualEmojis(guild){
    }catch(e){
     report.errors++;console.error('Visual emoji '+emoji.id+':',e.message);
     guildDb[emoji.id]={status:'error',name:emoji.name,reason:e.message,at:Date.now()};await save();
-    if(/429|403|401|Vision request 5/.test(e.message))break;
+    if(/429|403|401|cooldown|Vision request 5/.test(e.message))break;
    }
   }
   console.log('LumiVibe visual emoji organization:',JSON.stringify(report));
