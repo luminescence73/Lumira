@@ -14,3 +14,7 @@ export async function deleteMoment(g,index){const s=state(g);if(index<1||index>s
 
 export async function removeAuthorMoments(g,u){const s=state(g);const before=s.moments.length;s.moments=s.moments.filter(x=>x.author!==u);if(before!==s.moments.length)await save();return before-s.moments.length}
 export async function removeMessageMoment(g,id){const s=state(g);const before=s.moments.length;s.moments=s.moments.filter(x=>x.messageId!==id);if(before!==s.moments.length)await save();return before-s.moments.length}
+
+export function histories(g){return (state(g).histories||[]).slice()}
+export async function addHistory(g,text,by){const s=state(g);s.histories||=[];if(s.histories.length>=80)throw Error('History library full (80). Remove an entry first.');if(s.histories.some(x=>x.text.toLowerCase()===text.toLowerCase()))throw Error('That lore is already saved');s.histories.push({text,by,at:Date.now()});await save()}
+export async function deleteHistory(g,index){const s=state(g);s.histories||=[];if(index<1||index>s.histories.length)throw Error('No history entry with that number');s.histories.splice(index-1,1);await save()}
