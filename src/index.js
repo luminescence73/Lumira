@@ -2,7 +2,7 @@ import 'dotenv/config';
 import {installOperations} from './operations.js';
 import {emberSpringsContext} from './ember-springs.js';
 import {organizeVisualEmojis} from './emoji-visual.js';
-import {quotaReady,quotaDelay,isQuotaFailure} from './gemini-quota.js';
+import {quotaReady,quotaDelay,isQuotaFailure,retryDelay} from './gemini-quota.js';
 import {loadAdmin,config,authorize,privateAccess,stage,discard,proposals,preview,applyGuild,layoutPreview,makeChannel,imageForEmoji,imageForSticker,layoutPlan,applyLayout,applyLayoutOnce,finishLayoutOnce,populateEmptySectionsOnce,reconcileLegacyChannelsOnce,organizeEverythingOnce,restoreOriginalChannelsOnce,finishCleanupAndControlOnce,publishEmojiDirectoryOnce,repairControlFormattingOnce,organizeEmojiNamesOnce,refreshLiveboard,authorizeGracieStickerImportOnce,refreshStickerDirectory} from './admin.js';
 import {loadRoster,syncRoster,roster,findMembers} from './roster.js';
 import {loadEvents,schedule,upcoming,dueEvents} from './events.js';
@@ -127,7 +127,7 @@ async function replyTo(text,style='chaotic'){
  text='Style preference: '+styleInstruction+'\n'+text;
  const key=process.env.GEMINI_API_KEY;
  if(!key) throw new Error('GEMINI_API_KEY missing');
- const models=[...new Set([process.env.GEMINI_MODEL||'gemini-3.5-flash-lite','gemini-3.5-flash-lite','gemini-3.8-flash'])];
+ const models=[...new Set([process.env.GEMINI_MODEL||'gemini-3.5-flash-lite','gemini-3.5-flash-lite','gemini-3.8-flash','gemini-2.5-flash-lite','gemini-2.5-flash'])];
  for(const model of models){
   if(!quotaReady(model))continue;
   const controller=new AbortController();
@@ -137,7 +137,7 @@ async function replyTo(text,style='chaotic'){
     method:'POST',signal:controller.signal,headers:{'x-goog-api-key':key,'Content-Type':'application/json'},
     body:JSON.stringify({systemInstruction:{parts:[{text:SYSTEM}]},contents:[{role:'user',parts:[{text:text.slice(0,12000)}]}],generationConfig:{maxOutputTokens:200,temperature:0.9}})
    });
-   if(!res.ok){const error=await res.json().catch(()=>({}));console.error('Gemini model',model,'HTTP',res.status,'reason',String(error.error?.message||'unknown').slice(0,220));if(isQuotaFailure(res.status,error.error?.message)){quotaDelay(model,60*60*1000);continue}if([400,404,500,502,503,504].includes(res.status))continue;throw new Error('Gemini API error '+res.status)}
+   if(!res.ok){const error=await res.json().catch(()=>({}));console.error('Gemini model',model,'HTTP',res.status,'reason',String(error.error?.message||'unknown').slice(0,220));if(isQuotaFailure(res.status,error.error?.message)){quotaDelay(model,retryDelay(res,error.error?.message||''));continue}if([400,404,500,502,503,504].includes(res.status))continue;throw new Error('Gemini API error '+res.status)}
    const data=await res.json();
    const answer=data.candidates?.[0]?.content?.parts?.filter(p=>typeof p.text==='string').map(p=>p.text).join('').trim();
    if(answer){console.log('Gemini response succeeded using',model);return answer.slice(0,1800)}
