@@ -4,7 +4,7 @@ const file=path.join(process.env.LUMIRA_DATA_DIR||'/data','emoji-visual.json');
 const allowed=['pika','sxs','anime','animal','meme','cute','text'];
 let db={};let writes=Promise.resolve();
 async function load(){try{db=JSON.parse(await fs.readFile(file,'utf8'))}catch(e){if(e.code!=='ENOENT')throw e;db={}}}
-async function save(){const data=JSON.stringify(db);writes=writes.catch(()=>{}).then(async()=>{await fs.mkdir(path.dirname(file),{recursive:true});await fs.writeFile(file+'.tmp',data,{mode:0o600});await fs.rename(file+'.tmp',data,{mode:0o600}).catch(async()=>{await fs.rename(file+'.tmp',file)})});await writes}
+async function save(){const data=JSON.stringify(db);writes=writes.catch(()=>{}).then(async()=>{await fs.mkdir(path.dirname(file),{recursive:true});await fs.writeFile(file+'.tmp',data,{mode:0o600});await fs.rename(file+'.tmp',file)});await writes}
 function cleanName(s){return String(s||'').toLowerCase().replace(/[^a-z0-9_]/g,'_').replace(/_+/g,'_').replace(/^_|_$/g,'').slice(0,26)}
 async function classify(emoji){
  const key=process.env.GEMINI_API_KEY;if(!key)throw Error('Gemini API key unavailable');
