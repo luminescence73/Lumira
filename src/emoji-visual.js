@@ -1,5 +1,6 @@
 import {promises as fs} from 'node:fs';
 import path from 'node:path';
+import sharp from 'sharp';
 const file=path.join(process.env.LUMIRA_DATA_DIR||'/data','emoji-visual.json');
 const allowed=['pika','sxs','anime','animal','meme','cute','text'];
 let db={};let writes=Promise.resolve();
@@ -11,8 +12,9 @@ async function classify(emoji){
  const url=emoji.imageURL({extension:emoji.animated?'gif':'png',size:128});
  const res=await fetch(url,{signal:AbortSignal.timeout(10000)});
  if(!res.ok)throw Error('Emoji image unavailable '+res.status);
- const bytes=Buffer.from(await res.arrayBuffer());if(bytes.length>1000000)throw Error('Emoji image too large');
- const mime=emoji.animated?'image/gif':'image/png';
+ const raw=Buffer.from(await res.arrayBuffer());if(raw.length>1000000)throw Error('Emoji image too large');
+ const bytes=await sharp(raw,{animated:false}).resize(128,128,{fit:'contain'}).png().toBuffer();
+ const mime='image/png';
  const instructions='Identify what this Discord emoji image DEPICTS, not the emotion. Categories: pika for Pikachu/Pichu/Raichu; sxs for Sword x Staff game characters, logos or icons; anime for identifiable anime art; animal for other animals; meme for obvious meme characters/images; text for mainly written words; cute for cute designs not fitting above. Return ONLY compact JSON {"category":"pika|sxs|anime|animal|meme|cute|text|unknown","subject":"short descriptive subject in lowercase snake_case","confidence":0.0}. If unsure or blurry, use unknown. Do not guess based on the original filename.';
  const response=await fetch('https://generativelanguage.googleapis.com/v1beta/models/'+encodeURIComponent(process.env.GEMINI_MODEL||'gemini-3.5-flash-lite')+':generateContent',{
   method:'POST',headers:{'x-goog-api-key':key,'Content-Type':'application/json'},signal:AbortSignal.timeout(25000),
