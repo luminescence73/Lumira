@@ -5,6 +5,7 @@ import { bump, pulse } from './cards.js';
 import { publicSocialChannel } from './channels.js';
 import { handleDirectChat } from './conversations.js';
 import { createReminderDelivery } from './event-delivery.js';
+import { handleExpressionCopyMessage } from './expression-copy.js';
 import { loadEvents } from './events.js';
 import { channelAllowed, loadFeatures } from './features.js';
 import { handleInteraction } from './interactions.js';
@@ -32,7 +33,10 @@ export function createClient({ memberEvents = process.env.LUMIRA_MEMBERS_INTENT 
     GatewayIntentBits.GuildVoiceStates,
   ];
   if (memberEvents) intents.push(GatewayIntentBits.GuildMembers);
-  return new Client({ intents, partials: [Partials.Message, Partials.Channel, Partials.Reaction, Partials.GuildMember] });
+  return new Client({
+    intents,
+    partials: [Partials.Message, Partials.Channel, Partials.Reaction, Partials.GuildMember],
+  });
 }
 
 export function installBot(client, { scheduleInterval = interval, scheduleTimeout = timeout } = {}) {
@@ -44,6 +48,7 @@ export function installBot(client, { scheduleInterval = interval, scheduleTimeou
     if (!message.inGuild() || message.author.bot || message.webhookId || !client.user) return;
     try {
       pulse(message);
+      if (await handleExpressionCopyMessage(message, client)) return;
       if (await handleStickerChat(message, client)) return;
       if (
         await handleDirectChat(message, client.user.id, () => {

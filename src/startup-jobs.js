@@ -61,6 +61,19 @@ async function prepareGuild(guild) {
   await runJob('automatic member cards', () => populateMemberProfiles(guild, roster(guild.id)));
 }
 
+export async function registerLumiVibeCopyCommand(guild) {
+  const definition = commandDefinitions().find((command) => command.name === 'lumira-copy');
+  const registered = await guild.commands.create(definition);
+  const confirmed = await guild.commands.fetch(registered.id, { force: true });
+  if (
+    confirmed.name !== definition.name ||
+    !['emoji', 'sticker'].every((kind) => confirmed.options.some((option) => option.name === kind))
+  )
+    throw Error('Discord did not return both copy subcommands');
+  console.log('Verified LumiVibe #' + guild.id + ' slash command /lumira-copy ' + confirmed.id);
+  return confirmed;
+}
+
 export function installReadyJobs(client, scheduleInterval, scheduleTimeout) {
   client.once(Events.ClientReady, (readyClient) => {
     console.log('Lumira online as ' + readyClient.user.tag);
@@ -76,6 +89,7 @@ export function installReadyJobs(client, scheduleInterval, scheduleTimeout) {
     for (const guild of readyClient.guilds.cache.values()) {
       void prepareGuild(guild);
       if (guild.id === LUMIVIBE_GUILD_ID) {
+        void runJob('LumiVibe copy command registration', () => registerLumiVibeCopyCommand(guild));
         const classify = async () => {
           const result = await runJob('emoji organization', () => organizeVisualEmojis(guild));
           if (result) console.log('LumiVibe emoji organization:', JSON.stringify(result));

@@ -55,3 +55,48 @@ test('accepts sticker IDs independently of whether the bot can read the original
     /Discord message link/,
   );
 });
+
+test('the copy slash command is available directly in the LumiVibe guild', async () => {
+  const { registerLumiVibeCopyCommand } = await import('../src/startup-jobs.js');
+  let local;
+  const guild = {
+    id: 'test-guild',
+    commands: {
+      create: async (definition) => (local = { ...definition, id: 'copy-command' }),
+      fetch: async (id) => {
+        assert.equal(id, 'copy-command');
+        return local;
+      },
+    },
+  };
+  const registered = await registerLumiVibeCopyCommand(guild);
+  assert.equal(registered.name, 'lumira-copy');
+  assert.deepEqual(
+    registered.options.map((option) => option.name),
+    ['sticker', 'emoji'],
+  );
+});
+
+test('a plain text copy request works even before slash commands appear', async (t) => {
+  const { handleExpressionCopyMessage } = await import('../src/expression-copy.js');
+  const { LUMIVIBE_GUILD_ID } = await import('../src/channels.js');
+  t.mock.method(globalThis, 'fetch', async () => new Response(Buffer.from('image bytes')));
+  let reply;
+  const message = {
+    content: 'Lumira copy emoji <:dance:123456789012345678>',
+    guildId: LUMIVIBE_GUILD_ID,
+    author: { id: 'owner' },
+    guild: {
+      id: LUMIVIBE_GUILD_ID,
+      ownerId: 'owner',
+      members: { fetchMe: async () => ({ permissions: { has: () => true } }) },
+      emojis: { fetch: async () => [], create: async (payload) => payload },
+    },
+    reply: async (payload) => {
+      reply = payload;
+    },
+  };
+  assert.equal(await handleExpressionCopyMessage(message, { user: { id: 'bot' } }), true);
+  assert.match(reply.content, /Copied emoji \*\*dance\*\*/);
+  assert.deepEqual(reply.allowedMentions, { parse: [], repliedUser: false });
+});

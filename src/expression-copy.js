@@ -131,40 +131,73 @@ export async function copyExpression(guild, kind, source, customName, { request 
   }
 }
 
+const noMentions = { parse: [], repliedUser: false };
+
+function mayCopy(guild, kind, userId) {
+  const authorized = config(guild.id)[kind === 'sticker' ? 'stickerManagers' : 'emojiManagers'];
+  return userId === guild.ownerId || authorized.includes(userId);
+}
+
+async function importResult(client, guild, userId, kind, source, name) {
+  let content;
+  try {
+    const bot = await guild.members.fetchMe();
+    if (!bot.permissions.has(PermissionFlagsBits.CreateGuildExpressions))
+      throw Error('Lumira needs the Create Expressions permission.');
+    const expression = await resolveExpressionSource(client, kind, source, userId);
+    const copied = await copyExpression(guild, kind, expression, name);
+    content = 'Copied ' + kind + ' **' + copied.name + '** into LumiVibe. 💙';
+  } catch (error) {
+    const message = [30008, 30018, 30039].includes(error.code)
+      ? 'LumiVibe has reached its Discord ' + kind + ' limit.'
+      : error.message;
+    content = 'Could not copy the ' + kind + '. ' + message;
+  }
+  return { content, allowedMentions: noMentions };
+}
+
+const authorizationMessage = 'The server owner can authorize you to copy this type of expression.';
+
 export async function copyExpressionCommand(interaction) {
   const kind = interaction.options.getSubcommand();
   if (!interaction.inGuild() || interaction.guildId !== LUMIVIBE_GUILD_ID)
-    return interaction.reply({ content: 'This command is available in LumiVibe.', flags: MessageFlags.Ephemeral });
-  const authorized = config(interaction.guildId)[kind === 'sticker' ? 'stickerManagers' : 'emojiManagers'];
-  if (interaction.user.id !== interaction.guild.ownerId && !authorized.includes(interaction.user.id))
-    return interaction.reply({
-      content: 'The server owner can authorize you to copy this type of expression.',
-      flags: MessageFlags.Ephemeral,
-    });
+    return interaction.reply({ content: 'This command is available in LumiVibe', flags: MessageFlags.Ephemeral });
+  if (!mayCopy(interaction.guild, kind, interaction.user.id))
+    return interaction.reply({ content: authorizationMessage, flags: MessageFlags.Ephemeral });
   await interaction.deferReply({ flags: MessageFlags.Ephemeral });
-  try {
-    const bot = await interaction.guild.members.fetchMe();
-    if (!bot.permissions.has(PermissionFlagsBits.CreateGuildExpressions))
-      throw Error('Lumira needs the Create Expressions permission.');
-    const source = await resolveExpressionSource(
+  return interaction.editReply(
+    await importResult(
       interaction.client,
+      interaction.guild,
+      interaction.user.id,
       kind,
       interaction.options.getString('source', true),
-      interaction.user.id,
-    );
-    const copied = await copyExpression(interaction.guild, kind, source, interaction.options.getString('name'));
-    return interaction.editReply({
-      content: 'Copied ' + kind + ' **' + copied.name + '** into LumiVibe. 💙',
-      allowedMentions: { parse: [] },
-    });
-  } catch (error) {
-    const message =
-      error.code === 30008 || error.code === 30039
-        ? 'LumiVibe has reached its Discord ' + kind + ' limit.'
-        : error.message;
-    return interaction.editReply({
-      content: 'Could not copy the ' + kind + '. ' + message,
-      allowedMentions: { parse: [] },
-    });
+      interaction.options.getString('name'),
+    ),
+  );
+}
+
+export async function handleExpressionCopyMessage(message, client) {
+  if (message.guildId !== LUMIVIBE_GUILD_ID) return false;
+  const match = message.content
+    ?.trim()
+    .match(/^(?:lumira[:,]?|<@!?(\d+)>)\s+copy\s+(sticker|emoji)(?:\s+(.+))?$/i);
+  if (!match || (match[1] && match[1] !== client.user.id)) return false;
+  const kind = match[2].toLowerCase();
+  if (!mayCopy(message.guild, kind, message.author.id)) {
+    await message.reply({ content: authorizationMessage, allowedMentions: noMentions });
+    return true;
   }
+  const reference = message.reference?.messageId;
+  const source =
+    match[3] ||
+    (reference && 'https://discord.com/channels/' + message.guildId + '/' + message.channelId + '/' + reference);
+  const result = source
+    ? await importResult(client, message.guild, message.author.id, kind, source)
+    : {
+        content: 'Reply to the message containing the ' + kind + ' or paste its link or ID after the command.',
+        allowedMentions: noMentions,
+      };
+  await message.reply(result);
+  return true;
 }
