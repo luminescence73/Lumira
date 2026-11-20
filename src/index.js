@@ -1,17 +1,17 @@
 import 'dotenv/config';
 import {loadLore,jokes,moments,addJoke,deleteJoke,addMoment,deleteMoment} from './lore.js';
 import { loadMemories, memoryStatus, enableMemory, saveMemory, removeMemory, disableMemory } from './memory.js';
-import { Client, GatewayIntentBits, Events, MessageFlags, PermissionFlagsBits, SlashCommandBuilder } from 'discord.js';
+import { Client, GatewayIntentBits, Events, MessageFlags, PermissionFlagsBits, SlashCommandBuilder, Partials } from 'discord.js';
 const token=process.env.DISCORD_TOKEN;
 if(!token) throw new Error('DISCORD_TOKEN is required');
 const allowed=new Set((process.env.LUMIRA_CHANNEL_IDS||'').split(',').map(s=>s.trim()).filter(Boolean));
 const spontaneousEnabled=process.env.LUMIRA_SPONTANEOUS_ENABLED==='true';
 const spontaneousChannels=new Set((process.env.LUMIRA_SPONTANEOUS_CHANNEL_IDS||'').split(',').map(s=>s.trim()).filter(Boolean));
 const intents=[GatewayIntentBits.Guilds];
-intents.push(GatewayIntentBits.GuildMessages,GatewayIntentBits.MessageContent);
+intents.push(GatewayIntentBits.GuildMessages,GatewayIntentBits.MessageContent,GatewayIntentBits.GuildMessageReactions);
 await loadMemories();
 await loadLore();
-const client=new Client({intents});
+const client=new Client({intents,partials:[Partials.Message,Partials.Channel,Partials.Reaction]});
 client.on('raw',packet=>{if(packet.t==='MESSAGE_CREATE')console.log('Gateway MESSAGE_CREATE received; guild:',Boolean(packet.d?.guild_id),'mentions bot:',Array.isArray(packet.d?.mentions)&&packet.d.mentions.some(u=>u.id===client.user?.id),'content present:',Boolean(packet.d?.content))});
 const recentMessages=new Map();
 const lastSpoke=new Map();
@@ -197,5 +197,52 @@ client.on(Events.MessageCreate,async message=>{
  }catch(error){console.error('Spontaneous comment skipped:',error.message)}
  finally{pendingChannels.delete(message.channelId)}
 });
+
+// Automatic social lore: repeated short public phrases by multiple people, no private history.
+// This is a conservative heuristic, not an AI-generated profile of anyone.
+const phraseSignals=new Map();
+const automaticMomentCooldown=new Set();
+function safeSharedPhrase(text){
+ const t=text.trim().replace(/\\s+/g,' ');
+ if(t.length<9||t.length>85||t.split(' ').length<2||t.split(' ').length>12)return null;
+ if(/https?:|www\\.|@|<|>|\\d{3,}|\\b(?:address|phone|password|diagnos|suicid|medicat|trauma|hospital|therapy|pregnan|abuse)\\b/i.test(t))return null;
+ if(/[?!]{3,}/.test(t))return null;
+ return t;
+}
+client.on(Events.MessageCreate,async message=>{
+ if(!message.inGuild()||message.author.bot||message.webhookId||!publicSocialChannel(message.channel))return;
+ const phrase=safeSharedPhrase(message.content||'');
+ if(!phrase)return;
+ const key=message.guildId+':'+phrase.toLowerCase();
+ const now=Date.now();
+ if(phraseSignals.size>1500){for(const [k,v] of phraseSignals){if(now-v.last>7*86400000)phraseSignals.delete(k)}}
+ const s=phraseSignals.get(key)||{authors:new Set(),last:now};
+ if(now-s.last>7*86400000)s.authors.clear();
+ s.authors.add(message.author.id);s.last=now;phraseSignals.set(key,s);
+ if(s.authors.size<3||jokes(message.guildId).some(x=>x.text.toLowerCase()===phrase.toLowerCase()))return;
+ phraseSignals.delete(key);
+ try{await addJoke(message.guildId,phrase,'auto');console.log('Learned repeated public inside-joke candidate')}catch(e){console.error('Auto lore skipped:',e.message)}
+});
+client.on(Events.MessageReactionAdd,async (reaction,user)=>{
+ if(user.bot)return;
+ try{
+  if(reaction.partial)reaction=await reaction.fetch();
+  const message=reaction.message.partial?await reaction.message.fetch():reaction.message;
+  if(!message.inGuild()||message.author.bot||!publicSocialChannel(message.channel)||!message.content?.trim())return;
+  if(message.content.length>1000||/\\b(?:password|address|phone number|medical|therapy)\\b/i.test(message.content))return;
+  const unique=new Set();
+  for(const r of message.reactions.cache.values()){
+   if(r.count<2)continue;
+   const users=await r.users.fetch({limit:50});
+   for(const u of users.values())if(!u.bot)unique.add(u.id);
+  }
+  if(unique.size<5||automaticMomentCooldown.has(message.id)||moments(message.guildId).some(m=>m.messageId===message.id))return;
+  automaticMomentCooldown.add(message.id);
+  if(automaticMomentCooldown.size>2000)automaticMomentCooldown.clear();
+  await addMoment(message.guildId,{messageId:message.id,url:message.url,by:'auto',author:message.author.id,at:Date.now()});
+  console.log('Auto-saved highly reacted public scrapbook moment');
+ }catch(e){console.error('Auto scrapbook skipped:',e.message)}
+});
+
 // Passive participation requires the Message Content privileged intent in Discord Developer Portal.
 await client.login(token);
