@@ -1,5 +1,6 @@
 import 'dotenv/config';
 import {installOperations} from './operations.js';
+import {deliverEventReminders} from './event-delivery.js';
 import {lumiVibeCanonContext} from './lumivibe-canon.js';
 import {organizeVisualEmojis} from './emoji-visual.js';
 import {quotaReady,quotaDelay,isQuotaFailure,retryDelay} from './gemini-quota.js';
@@ -688,6 +689,6 @@ client.on(Events.MessageReactionAdd,async (reaction,user)=>{
 
 client.on(Events.MessageDelete,async message=>{if(!message.guildId)return;try{await removeMessageMoment(message.guildId,message.id)}catch(e){console.error('Scrapbook deletion sync:',e.message)}});
 // Event reminders are only sent to channels explicitly selected by the server owner.
-setInterval(async()=>{try{for(const e of await dueEvents()){if(!channelAllowed(e.g,e.channel))continue;const ch=await client.channels.fetch(e.channel).catch(()=>null);if(ch&&publicSocialChannel(ch)&&ch.isTextBased())await ch.send({content:'📅 **LumiVibe event:** '+e.title,allowedMentions:{parse:[]}})}}catch(err){console.error('Event delivery:',err.message)}},60000).unref();
+setInterval(()=>void deliverEventReminders(client,{dueEvents,channelAllowed,publicSocialChannel}),60000).unref();
 // Passive participation requires the Message Content privileged intent in Discord Developer Portal.
 await client.login(token);
