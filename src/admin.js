@@ -88,3 +88,35 @@ export async function finishLayoutOnce(guild){
  }
  s.layoutVersion=2;await save();return {alreadyDone:false,report};
 }
+
+export async function populateEmptySectionsOnce(guild){
+ const s=state(guild.id);if(s.layoutVersion>=3)return {alreadyDone:true};
+ const me=await guild.members.fetchMe();if(!me.permissions.has(PermissionFlagsBits.ManageChannels))throw Error('Lumira needs Manage Channels');
+ const report=[];const findCat=name=>guild.channels.cache.find(x=>x.type===ChannelType.GuildCategory&&norm(x.name)===norm(name));
+ const voice=findCat('✦ VOICE LOUNGE');const control=findCat('✦ LUMIRA CONTROL');
+ if(!voice||!control)throw Error('Voice Lounge or Lumira Control category missing');
+ const voiceNames=['General VC','Gaming VC','Chill VC'];
+ for(let i=0;i<voiceNames.length;i++){
+  const name=voiceNames[i];let ch=guild.channels.cache.find(x=>x.type===ChannelType.GuildVoice&&norm(x.name)===norm(name));
+  if(!ch){ch=await guild.channels.create({name,type:ChannelType.GuildVoice,parent:voice.id,reason:'Owner-requested voice lounge channels'});report.push('Created voice '+name)}
+  else if(ch.parentId!==voice.id){await ch.setParent(voice.id,{lockPermissions:false,reason:'Owner-requested voice lounge'});report.push('Moved voice '+name)}
+  await ch.setPosition(i,{reason:'LumiVibe voice lounge order'});
+ }
+ // Explicitly deny general visibility. Only the owner and bot receive new access grants.
+ await control.permissionOverwrites.edit(guild.roles.everyone.id,{ViewChannel:false},{reason:'Private bot control category'});
+ await control.permissionOverwrites.edit(guild.ownerId,{ViewChannel:true},{reason:'Owner access to bot control'});
+ await control.permissionOverwrites.edit(me.id,{ViewChannel:true,ManageChannels:true},{reason:'Lumira access to bot control'});
+ for(const name of ['liveboard','bot-logs']){
+  let ch=guild.channels.cache.find(x=>x.type===ChannelType.GuildText&&norm(x.name)===norm(name));
+  if(!ch){ch=await guild.channels.create({name,type:ChannelType.GuildText,parent:control.id,permissionOverwrites:[
+   {id:guild.roles.everyone.id,deny:[PermissionFlagsBits.ViewChannel]},
+   {id:guild.ownerId,allow:[PermissionFlagsBits.ViewChannel]},
+   {id:me.id,allow:[PermissionFlagsBits.ViewChannel,PermissionFlagsBits.ManageChannels]}
+  ],reason:'Owner-requested private Lumira control'});report.push('Created private #'+name)}
+  else if(ch.parentId!==control.id){await ch.setParent(control.id,{lockPermissions:false,reason:'Owner-requested Lumira control'});report.push('Moved #'+name)}
+  await ch.permissionOverwrites.edit(guild.roles.everyone.id,{ViewChannel:false},{reason:'Keep Lumira control private'});
+  await ch.permissionOverwrites.edit(guild.ownerId,{ViewChannel:true},{reason:'Owner-only Lumira control'});
+  await ch.permissionOverwrites.edit(me.id,{ViewChannel:true},{reason:'Lumira bot control access'});
+ }
+ s.layoutVersion=3;await save();return {alreadyDone:false,report};
+}
