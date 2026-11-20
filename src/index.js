@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import {loadPlayground,gameCard,vote,leaderboard,award,recentAwards} from './playground.js';
 import {renderCard,studioBoard,generateImage} from './visual.js';
 import {loadFeatures,settings,setSetting,getEgo,setEgo,clearEgo,scrapbookAllowed,setScrapbookOptOut,channelAllowed,excludedChannels,setChannelAllowed,memberMuted,setMemberMuted} from './features.js';
 import {loadLore,jokes,moments,addJoke,deleteJoke,addMoment,deleteMoment,removeAuthorMoments,removeMessageMoment} from './lore.js';
@@ -14,6 +15,7 @@ intents.push(GatewayIntentBits.GuildMessages,GatewayIntentBits.MessageContent,Ga
 await loadMemories();
 await loadLore();
 await loadFeatures();
+await loadPlayground();
 const client=new Client({intents,partials:[Partials.Message,Partials.Channel,Partials.Reaction]});
 client.on('raw',packet=>{if(packet.t==='MESSAGE_CREATE')console.log('Gateway MESSAGE_CREATE received; guild:',Boolean(packet.d?.guild_id),'mentions bot:',Array.isArray(packet.d?.mentions)&&packet.d.mentions.some(u=>u.id===client.user?.id),'content present:',Boolean(packet.d?.content))});
 const recentMessages=new Map();
@@ -160,19 +162,30 @@ client.once(Events.ClientReady,async c=>{
  .addSubcommand(s=>s.setName('character').setDescription('Make a PNG character card from your opt-in alter ego'))
  .addSubcommand(s=>s.setName('collage').setDescription('Preview a scrapbook-inspired visual recap (private)'))
  .addSubcommand(s=>s.setName('dashboard').setDescription('Owner: open visual studio settings')).toJSON();
+ const playCommand=new SlashCommandBuilder().setName('lumira-play').setDescription('LumiVibe games and fictional awards')
+ .addSubcommand(s=>s.setName('rather').setDescription('Start a Would You Rather vote'))
+ .addSubcommand(s=>s.setName('trivia').setDescription('Start a trivia round'))
+ .addSubcommand(s=>s.setName('roulette').setDescription('Get a party game prompt'))
+ .addSubcommand(s=>s.setName('leaderboard').setDescription('See the trivia leaderboard'))
+ .addSubcommand(s=>s.setName('award').setDescription('Give someone a silly fictional award').addUserOption(o=>o.setName('member').setDescription('Recipient').setRequired(true)).addStringOption(o=>o.setName('title').setDescription('Funny award title').setRequired(true).setMaxLength(75)))
+ .addSubcommand(s=>s.setName('awards').setDescription('View recent fictional awards')).toJSON();
  const forgetCommand=new SlashCommandBuilder().setName('lumira-forget').setDescription('Clear your recent Lumira conversation in this channel').toJSON();
  try {
    if(process.env.DISCORD_GUILD_ID){
      const guild=await c.guilds.fetch(process.env.DISCORD_GUILD_ID);
-     await guild.commands.set([forgetCommand,memoryCommand,loreCommand,scrapbookCommand,egoCommand,controlCommand,vibeCommand,privacyCommand,channelCommand,studioCommand]);
+     await guild.commands.set([forgetCommand,memoryCommand,loreCommand,scrapbookCommand,egoCommand,controlCommand,vibeCommand,privacyCommand,channelCommand,studioCommand,playCommand]);
      console.log('Registered /lumira-forget in configured guild');
    } else {
-     await c.application.commands.set([forgetCommand,memoryCommand,loreCommand,scrapbookCommand,egoCommand,controlCommand,vibeCommand,privacyCommand,channelCommand,studioCommand]);
+     await c.application.commands.set([forgetCommand,memoryCommand,loreCommand,scrapbookCommand,egoCommand,controlCommand,vibeCommand,privacyCommand,channelCommand,studioCommand,playCommand]);
      console.log('Registered /lumira-forget globally (may take time to appear)');
    }
  }catch(error){console.error('Slash command registration failed:',error)}
 });
 client.on(Events.InteractionCreate,async interaction=>{
+ if(interaction.isButton()&&interaction.customId.startsWith('lumira:game:')){
+  if(!interaction.inGuild()||memberMuted(interaction.guildId,interaction.user.id))return interaction.reply({content:'You cannot vote while Lumira is muted.',flags:MessageFlags.Ephemeral});
+  try{const [, ,id,n]=interaction.customId.split(':');const response=await vote(interaction.guildId,interaction.channelId,id,interaction.user.id,Number(n));return interaction.reply({content:response,flags:MessageFlags.Ephemeral})}catch(e){return interaction.reply({content:e.message,flags:MessageFlags.Ephemeral})}
+ }
  if(interaction.isButton()&&interaction.customId.startsWith('lumira:studio:')){
   if(!interaction.inGuild()||interaction.guild.ownerId!==interaction.user.id)return interaction.reply({content:'Owner only.',flags:MessageFlags.Ephemeral});
   const key=interaction.customId.split(':')[2];
@@ -191,7 +204,23 @@ client.on(Events.InteractionCreate,async interaction=>{
   try{if(!['autoLore','autoScrapbook','spontaneous','roasts'].includes(key))throw Error('Invalid control');await setSetting(interaction.guildId,key,!settings(interaction.guildId)[key]);return interaction.update(liveboard(interaction.guildId))}
   catch(e){return interaction.reply({content:'Could not update: '+e.message,flags:MessageFlags.Ephemeral})}
  }
- if(!interaction.isChatInputCommand()||!['lumira-forget','lumira-memory','lumira-lore','lumira-scrapbook','lumira-ego','lumira-control','lumira-vibe','lumira-privacy','lumira-channels','lumira-studio'].includes(interaction.commandName))return;
+ if(!interaction.isChatInputCommand()||!['lumira-forget','lumira-memory','lumira-lore','lumira-scrapbook','lumira-ego','lumira-control','lumira-vibe','lumira-privacy','lumira-channels','lumira-studio','lumira-play'].includes(interaction.commandName))return;
+ if(interaction.commandName==='lumira-play'){
+  if(!interaction.inGuild()||!publicSocialChannel(interaction.channel))return interaction.reply({content:'Games are only available in permitted public channels.',flags:MessageFlags.Ephemeral});
+  if(memberMuted(interaction.guildId,interaction.user.id))return interaction.reply({content:'Unmute Lumira to play.',flags:MessageFlags.Ephemeral});
+  const sub=interaction.options.getSubcommand(),g=interaction.guildId;
+  try{
+   if(['rather','trivia','roulette'].includes(sub))return interaction.reply(gameCard(g,interaction.channelId,sub,interaction.user.id));
+   if(sub==='leaderboard')return interaction.reply({content:'🏆 **LumiVibe Trivia Leaderboard**\\n'+leaderboard(g),allowedMentions:{parse:[]}});
+   if(sub==='awards')return interaction.reply({content:'🏅 **Recent Fictional Awards**\\n'+(recentAwards(g).map(a=>'<@'+a.to+'>: '+a.title).join('\\n')||'No awards yet.'),allowedMentions:{parse:[]}});
+   const target=interaction.options.getUser('member'),title=interaction.options.getString('title');
+   if(target.bot||memberMuted(g,target.id))throw Error('This member cannot receive an award.');
+   if(/@everyone|@here|<@|https?:/i.test(title))throw Error('Keep awards free of mentions and links.');
+   await award(g,interaction.user.id,target.id,title);
+   const card=await renderCard({title:'LumiVibe Award',subtitle:'Awarded to '+target.username,lines:[title],kind:'Fictional Award'});
+   return interaction.reply({content:'🏅 A fictional award for '+target.username+'!',files:[card],allowedMentions:{parse:[]}});
+  }catch(e){return interaction.reply({content:'Game unavailable: '+e.message,flags:MessageFlags.Ephemeral})}
+ }
  if(interaction.commandName==='lumira-studio'){
   if(!interaction.inGuild())return interaction.reply({content:'Only available in LumiVibe.',flags:MessageFlags.Ephemeral});
   const g=interaction.guildId,sub=interaction.options.getSubcommand(),s=settings(g);
