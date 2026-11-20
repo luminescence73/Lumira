@@ -157,8 +157,8 @@ export async function organizeEverythingOnce(guild){
  const groups=[
   {cat:'✦ ARRIVALS',names:['welcome','new-members','goodbye']},
   {cat:'✦ COMMONS',names:['general','talk','media','music','i-m-pissed-off','carl-bot']},
-  {cat:'✦ INTERESTS',names:['anime-manga','shug-s-kitchen','lumi-s-art','stars-charts-and-hoe-roscopes','gracie-s-horoscopes','cards']},
-  {cat:'✦ GAMING',names:['game-announcements','game-updates','gift-codes','sword-x-staff','general-gaming']},
+  {cat:'✦ INTERESTS',names:['anime-manga','shug-s-kitchen','lumi-s-art','cosmic-chaos','cards']},
+  {cat:'✦ GAMING',names:['game-updates','gift-codes','sword-x-staff','general-gaming']},
   {cat:'✦ ARCHIVES',names:['scrapbook','milestones']},
   {cat:'✦ VOICE LOUNGE',names:['voice','gaming','chilling','music']},
   {cat:'✦ PRIVATE GALLERIES',names:['lumi-private','lumi-sxs','sage-sxs','heart-of-the-sea','a-father-s-promise','bot-carl-private']},
@@ -179,4 +179,29 @@ export async function organizeEverythingOnce(guild){
   }
  }
  s.organizedVersion=1;await save();return {alreadyDone:false,report};
+}
+
+export async function restoreOriginalChannelsOnce(guild){
+ const s=state(guild.id);if(s.originalChannelFixVersion===1)return {alreadyDone:true};
+ const report=[];const all=()=>[...guild.channels.cache.values()].filter(x=>x.type===ChannelType.GuildText);
+ const originalAstro=all().find(x=>norm(x.name)==='stars-charts-and-hoe-roscopes');
+ const originalGame=all().find(x=>norm(x.name)==='game-announcements');
+ if(!originalAstro||!originalGame)throw Error('Original channels not found; refusing to delete or replace anything');
+ const preserveOrRemove=async(ch,tag)=>{
+  // Never erase existing messages or files: only delete provably empty newly created duplicates.
+  let empty=false;try{const messages=await ch.messages.fetch({limit:1});empty=messages.size===0}catch(e){report.push('Could not inspect '+ch.name+': '+e.message)}
+  if(empty){await ch.delete('Remove empty Lumira-created duplicate; original channel retained');report.push('Removed empty duplicate '+tag)}
+  else{await ch.setName('archive-'+tag+'-'+ch.id.slice(-4),'Preserve existing duplicate content pending review');report.push('Archived nonempty duplicate '+tag)}
+ };
+ for(const ch of all().filter(x=>['gracies-horoscopes','gracie-s-horoscopes','cosmic-chaos'].includes(norm(x.name))&&x.id!==originalAstro.id))await preserveOrRemove(ch,'horoscopes');
+ for(const ch of all().filter(x=>norm(x.name)==='game-updates'&&x.id!==originalGame.id))await preserveOrRemove(ch,'game-updates');
+ await originalAstro.setName('cosmic-chaos','Owner-requested rename preserving Gracie original astrology history');
+ report.push('Renamed original astrology channel to cosmic-chaos');
+ await originalGame.setName('game-updates','Owner-requested rename preserving original game announcements history');
+ report.push('Renamed original game-announcements to game-updates');
+ const interest=guild.channels.cache.find(x=>x.type===ChannelType.GuildCategory&&norm(x.name)===norm('✦ INTERESTS'));
+ const gaming=guild.channels.cache.find(x=>x.type===ChannelType.GuildCategory&&norm(x.name)===norm('✦ GAMING'));
+ if(interest&&originalAstro.parentId!==interest.id)await originalAstro.setParent(interest.id,{lockPermissions:false});
+ if(gaming&&originalGame.parentId!==gaming.id)await originalGame.setParent(gaming.id,{lockPermissions:false});
+ s.originalChannelFixVersion=1;await save();return {alreadyDone:false,report};
 }
