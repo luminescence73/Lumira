@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import {loadFeatures,settings,setSetting,getEgo,setEgo,clearEgo,scrapbookAllowed,setScrapbookOptOut} from './features.js';
+import {loadFeatures,settings,setSetting,getEgo,setEgo,clearEgo,scrapbookAllowed,setScrapbookOptOut,channelAllowed,excludedChannels,setChannelAllowed,memberMuted,setMemberMuted} from './features.js';
 import {loadLore,jokes,moments,addJoke,deleteJoke,addMoment,deleteMoment,removeAuthorMoments,removeMessageMoment} from './lore.js';
 import { loadMemories, memoryStatus, enableMemory, saveMemory, removeMemory, disableMemory } from './memory.js';
 import { Client, GatewayIntentBits, Events, MessageFlags, PermissionFlagsBits, SlashCommandBuilder, Partials, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
@@ -27,6 +27,7 @@ function liveboard(g){
  const names={autoLore:'Auto Lore',autoScrapbook:'Auto Scrapbook',spontaneous:'Spontaneous Chat',roasts:'Roast Mode'};
  const embed=new EmbedBuilder().setColor(0x69b9f6).setTitle('🦋 Lumira Liveboard').setDescription('Private owner dashboard • switches apply immediately')
  .addFields({name:'Feature switches',value:Object.entries(names).map(([k,n])=>(s[k]?'🟢':'⚫')+' **'+n+'**').join('\\n')},
+ {name:'Excluded channels',value:String(excludedChannels(g).length),inline:true},
  {name:'Saved server lore',value:String(jokes(g).length)+' jokes • '+String(moments(g).length)+' scrapbook moments',inline:true},
  {name:'Since last restart',value:v.messages+' public messages • '+v.mentions+' mentions • '+v.comments+' comments • '+v.lore+' auto jokes • '+v.scrapbook+' auto moments',inline:false})
  .setFooter({text:'Private to server owner • live counters reset on restart'});
@@ -68,7 +69,7 @@ async function replyTo(text){
  }
  throw new Error('All Gemini models failed');
 }
-function publicSocialChannel(channel){return Boolean(channel?.guild&&channel.permissionsFor?.(channel.guild.roles.everyone)?.has(PermissionFlagsBits.ViewChannel))}
+function publicSocialChannel(channel){return Boolean(channel?.guild&&channelAllowed(channel.guild.id,channel.id)&&channel.permissionsFor?.(channel.guild.roles.everyone)?.has(PermissionFlagsBits.ViewChannel))}
 // Bounded, read-only public-channel context. No archives or profiles are created.
 async function getPublicConversationContext(message){
  if(!publicSocialChannel(message.channel)||!message.channel.messages?.fetch)return '';
@@ -118,14 +119,22 @@ client.once(Events.ClientReady,async c=>{
  const vibeCommand=new SlashCommandBuilder().setName('lumira-vibe').setDescription('See LumiVibe activity and memorable moments')
  .addSubcommand(s=>s.setName('now').setDescription('See recent public chat activity'))
  .addSubcommand(s=>s.setName('recap').setDescription('Get a short recap from saved public scrapbook links')).toJSON();
+ const privacyCommand=new SlashCommandBuilder().setName('lumira-privacy').setDescription('Control how Lumira interacts with you')
+ .addSubcommand(s=>s.setName('mute').setDescription('Stop Lumira from reacting to or learning from your messages'))
+ .addSubcommand(s=>s.setName('unmute').setDescription('Allow Lumira to interact with you again'))
+ .addSubcommand(s=>s.setName('status').setDescription('View your privacy preferences')).toJSON();
+ const channelCommand=new SlashCommandBuilder().setName('lumira-channels').setDescription('Server owner: control which public channels Lumira observes')
+ .addSubcommand(s=>s.setName('exclude').setDescription('Exclude a channel from Lumira social features').addChannelOption(o=>o.setName('channel').setDescription('Channel to exclude').setRequired(true)))
+ .addSubcommand(s=>s.setName('include').setDescription('Allow Lumira in a previously excluded channel').addChannelOption(o=>o.setName('channel').setDescription('Channel to include').setRequired(true)))
+ .addSubcommand(s=>s.setName('list').setDescription('Show excluded channels')).toJSON();
  const forgetCommand=new SlashCommandBuilder().setName('lumira-forget').setDescription('Clear your recent Lumira conversation in this channel').toJSON();
  try {
    if(process.env.DISCORD_GUILD_ID){
      const guild=await c.guilds.fetch(process.env.DISCORD_GUILD_ID);
-     await guild.commands.set([forgetCommand,memoryCommand,loreCommand,scrapbookCommand,egoCommand,controlCommand,vibeCommand]);
+     await guild.commands.set([forgetCommand,memoryCommand,loreCommand,scrapbookCommand,egoCommand,controlCommand,vibeCommand,privacyCommand,channelCommand]);
      console.log('Registered /lumira-forget in configured guild');
    } else {
-     await c.application.commands.set([forgetCommand,memoryCommand,loreCommand,scrapbookCommand,egoCommand,controlCommand,vibeCommand]);
+     await c.application.commands.set([forgetCommand,memoryCommand,loreCommand,scrapbookCommand,egoCommand,controlCommand,vibeCommand,privacyCommand,channelCommand]);
      console.log('Registered /lumira-forget globally (may take time to appear)');
    }
  }catch(error){console.error('Slash command registration failed:',error)}
@@ -137,7 +146,25 @@ client.on(Events.InteractionCreate,async interaction=>{
   try{if(!['autoLore','autoScrapbook','spontaneous','roasts'].includes(key))throw Error('Invalid control');await setSetting(interaction.guildId,key,!settings(interaction.guildId)[key]);return interaction.update(liveboard(interaction.guildId))}
   catch(e){return interaction.reply({content:'Could not update: '+e.message,flags:MessageFlags.Ephemeral})}
  }
- if(!interaction.isChatInputCommand()||!['lumira-forget','lumira-memory','lumira-lore','lumira-scrapbook','lumira-ego','lumira-control','lumira-vibe'].includes(interaction.commandName))return;
+ if(!interaction.isChatInputCommand()||!['lumira-forget','lumira-memory','lumira-lore','lumira-scrapbook','lumira-ego','lumira-control','lumira-vibe','lumira-privacy','lumira-channels'].includes(interaction.commandName))return;
+ if(interaction.commandName==='lumira-privacy'){
+  if(!interaction.inGuild())return interaction.reply({content:'Only available in LumiVibe.',flags:MessageFlags.Ephemeral});
+  const g=interaction.guildId,u=interaction.user.id,sub=interaction.options.getSubcommand();
+  try{
+   if(sub==='mute'){await setMemberMuted(g,u,true);await setScrapbookOptOut(g,u,true);await removeAuthorMoments(g,u);for(const key of conversations.keys())if(key.endsWith(':'+u))conversations.delete(key)}
+   if(sub==='unmute')await setMemberMuted(g,u,false);
+   return interaction.reply({content:'Privacy preferences: '+(memberMuted(g,u)?'Lumira will not respond to your mentions, use your messages for auto lore, or save your posts to the scrapbook.':'Lumira interactions enabled.')+'\\nScrapbook auto-saving: '+(scrapbookAllowed(g,u)?'allowed':'off')+'\\nYou can manage personal saved facts separately with /lumira-memory.',flags:MessageFlags.Ephemeral});
+  }catch(e){return interaction.reply({content:'Privacy update failed: '+e.message,flags:MessageFlags.Ephemeral})}
+ }
+ if(interaction.commandName==='lumira-channels'){
+  if(!interaction.inGuild()||interaction.guild.ownerId!==interaction.user.id)return interaction.reply({content:'Server owner only.',flags:MessageFlags.Ephemeral});
+  const g=interaction.guildId,sub=interaction.options.getSubcommand();
+  try{
+   if(sub!=='list'){const ch=interaction.options.getChannel('channel');if(ch.guildId!==g)throw Error('Channel must belong to this server');await setChannelAllowed(g,ch.id,sub==='include')}
+   const ids=excludedChannels(g);
+   return interaction.reply({content:'**Excluded channels**\\n'+(ids.length?ids.map(id=>'<#'+id+'>').join('\\n'):'None')+'\\nExcluded channels are ignored for social monitoring, scrapbook, lore and recent context.',flags:MessageFlags.Ephemeral,allowedMentions:{parse:[]}});
+  }catch(e){return interaction.reply({content:'Channel setting failed: '+e.message,flags:MessageFlags.Ephemeral})}
+ }
  if(interaction.commandName==='lumira-vibe'){
   if(!interaction.inGuild())return interaction.reply({content:'Only available in LumiVibe.',flags:MessageFlags.Ephemeral});
   const g=interaction.guildId,sub=interaction.options.getSubcommand(),v=vibe(g);
@@ -223,6 +250,7 @@ client.on(Events.MessageCreate,async message=>{
  if(!message.inGuild()||message.author.bot||message.webhookId||!client.user)return;
  const mentioned=message.mentions.users.has(client.user.id)||new RegExp('<@!?'+client.user.id+'>').test(message.content||'');
  if(!mentioned)return;
+ if(memberMuted(message.guildId,message.author.id))return;
  bump(message.guildId,'mentions');
  console.log('Direct mention matched:',message.channelId);
  console.log('Lumira mention received; channel:',message.channelId,'content length:',message.content?.length||0,'permitted:',permitted(message.channelId));
@@ -250,7 +278,7 @@ client.on(Events.MessageCreate,async message=>{
 
 // Passive conversation participation is opt-in and limited to explicitly approved channels.
 client.on(Events.MessageCreate,async message=>{
- if(!spontaneousEnabled||!message.inGuild()||!settings(message.guildId).spontaneous||message.author.bot||message.webhookId||!(spontaneousChannels.has(message.channelId)||(spontaneousChannels.size===0&&message.channel.permissionsFor?.(message.guild.roles.everyone)?.has(PermissionFlagsBits.ViewChannel))))return;
+ if(!spontaneousEnabled||!message.inGuild()||!settings(message.guildId).spontaneous||memberMuted(message.guildId,message.author.id)||!channelAllowed(message.guildId,message.channelId)||message.author.bot||message.webhookId||!(spontaneousChannels.has(message.channelId)||(spontaneousChannels.size===0&&message.channel.permissionsFor?.(message.guild.roles.everyone)?.has(PermissionFlagsBits.ViewChannel))))return;
  if(!message.content?.trim()||message.content.length>1200||message.mentions.users.has(client.user.id))return;
  const now=Date.now();
  const history=(recentMessages.get(message.channelId)||[]).filter(item=>now-item.time<10*60*1000);
@@ -289,7 +317,7 @@ function safeSharedPhrase(text){
  return t;
 }
 client.on(Events.MessageCreate,async message=>{
- if(!message.inGuild()||message.author.bot||message.webhookId||!publicSocialChannel(message.channel)||!settings(message.guildId).autoLore)return;
+ if(!message.inGuild()||message.author.bot||message.webhookId||!publicSocialChannel(message.channel)||!settings(message.guildId).autoLore||memberMuted(message.guildId,message.author.id))return;
  const phrase=safeSharedPhrase(message.content||'');
  if(!phrase)return;
  const key=message.guildId+':'+phrase.toLowerCase();
@@ -307,7 +335,7 @@ client.on(Events.MessageReactionAdd,async (reaction,user)=>{
  try{
   if(reaction.partial)reaction=await reaction.fetch();
   const message=reaction.message.partial?await reaction.message.fetch():reaction.message;
-  if(!message.inGuild()||message.author.bot||!publicSocialChannel(message.channel)||!settings(message.guildId).autoScrapbook||!scrapbookAllowed(message.guildId,message.author.id)||!message.content?.trim())return;
+  if(!message.inGuild()||message.author.bot||!publicSocialChannel(message.channel)||!settings(message.guildId).autoScrapbook||memberMuted(message.guildId,message.author.id)||!scrapbookAllowed(message.guildId,message.author.id)||!message.content?.trim())return;
   if(message.content.length>1000||/\\b(?:password|address|phone number|medical|therapy)\\b/i.test(message.content))return;
   const unique=new Set();
   for(const r of message.reactions.cache.values()){
