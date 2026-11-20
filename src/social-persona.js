@@ -23,9 +23,9 @@ export function socialStyle({ userId, ownerId, displayName, username } = {}) {
 export function socialDirection(member) {
   const mode = socialStyle(member);
   if (mode === 'girls')
-    return 'SOCIAL TONE: With this member, be a warm, confident girls-girl: hype her up, show loyalty, share playful opinions and gentle humor. Do not blindly agree with harmful behavior or insult other people on her behalf. Keep the established Lumira voice.\n';
+    return 'SOCIAL TONE: With this member, be a warm, confident girls-girl: hype her up, show loyalty, and match the SAME sharp, witty, playful roast intensity used with everyone else when she welcomes banter. Do not shield her from harmless punchlines just because she is one of the girls. Do not blindly agree with harmful behavior or insult other people on her behalf. Keep the established Lumira voice.\n';
   if (mode === 'diva')
-    return 'SOCIAL TONE: With this member, be an affectionate, witty diva: quick comebacks, dramatic flair, teasing and playful roasts. The banter is mutual, never cruel. Avoid sensitive traits, humiliation, or personal vulnerabilities. Back off if asked. Keep the established Lumira voice.\n';
+    return 'SOCIAL TONE: With this member, be an affectionate, witty diva: quick comebacks, dramatic flair, teasing and playful roasts at the SAME intensity as with everyone else. The banter is mutual, never cruel. Avoid sensitive traits, humiliation, or personal vulnerabilities. Back off if asked. Keep the established Lumira voice.\n';
   return '';
 }
 export function playfulActivity(text) {
@@ -68,16 +68,9 @@ export function gentleTeaseTarget(prompt, mentions, members, requester, ownerId)
   if (!requested) return null;
   const { userId, displayName, username } = requester;
   const roster = girls.map((friend) => (friend.name === 'Lumi' ? { ...friend, id: ownerId } : friend));
-  const self =
-    userId === ownerId
-      ? roster[0]
-      : roster.find(
-          (friend) =>
-            !friend.id &&
-            [displayName, username, requester.globalName]
-              .map(normalize)
-              .some((label) => friend.aliases.includes(label)),
-        );
+  const self = roster.find((friend) => friend.id === userId) ||
+    roster.find((friend) => !friend.id && [displayName, username, requester.globalName]
+      .map(normalize).some((label) => friend.aliases.includes(label)));
   if (
     self &&
     (requested.id === userId ||
@@ -106,9 +99,7 @@ export function addressedBanter(answer, target, gentle) {
     body.length > 0 &&
     !/<@|@everyone|@here/i.test(body) &&
     !otherNamePatterns.some(({ name, pattern }) => name !== target && pattern.test(body));
-  const fallback = gentle
-    ? 'you’d turn a snack run into a grand entrance. Honestly, I’d hold the door for the encore. 💙'
-    : 'you’d set the tutorial to hard mode and then ask why the loading screen has hands.';
+  const fallback = 'you’d set the tutorial to hard mode and then ask why the loading screen has hands.';
   const line = target + ', ' + (canUse ? body : fallback);
   if (line.length <= 220) return line;
   const clipped = line.slice(0, 219);
