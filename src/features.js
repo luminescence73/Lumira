@@ -13,6 +13,8 @@ export function excludedChannels(g){return [...(state(g).excludedChannels||[])]}
 export async function setChannelAllowed(g,c,allowed){const s=state(g);s.excludedChannels||=[];s.excludedChannels=s.excludedChannels.filter(x=>x!==c);if(!allowed)s.excludedChannels.push(c);await save()}
 export function memberMuted(g,u){return Boolean(state(g).mutedMembers?.[u])}
 export async function setMemberMuted(g,u,muted){const s=state(g);s.mutedMembers||={};if(muted)s.mutedMembers[u]=true;else delete s.mutedMembers[u];await save()}
+export function personality(g){return state(g).personality||'chaotic'}
+export async function setPersonality(g,value){if(!['chaotic','cozy','witty'].includes(value))throw Error('Unknown personality');state(g).personality=value;await save()}
 export function getEgo(g,u){return state(g).egos[u]||null}
 export async function setEgo(g,u,value){state(g).egos[u]=value;await save()}
 export async function clearEgo(g,u){delete state(g).egos[u];await save()}
