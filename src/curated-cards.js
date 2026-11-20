@@ -25,7 +25,7 @@ export async function publishCuratedCards(guild){
   if(matches.length!==1){(matches.length?'ambiguous':'unmatched').push(item.name);continue}
   const entry=matches[0],existing=profile(guild.id,entry.id);
   // Respect members' own edited profiles. Never overwrite a member-created card.
-  if(existing&&!existing.curated)continue;
+  if(existing?.optedOut||existing?.automatic===false)continue;
   const user=await guild.client.users.fetch(entry.id).catch(()=>null);if(!user){result.errors.push(item.name+': user unavailable');continue}
   const embed=new EmbedBuilder().setColor(0x9ebdff).setTitle('✦ '+item.name+' | '+item.title).setThumbnail(user.displayAvatarURL({size:256})).setDescription(item.about).addFields({name:'Known for',value:item.tags}).setFooter({text:'LumiVibe community card • Based on shared group stories • /lumira-profile to customize or delete'});
   try{
