@@ -18,6 +18,11 @@ export async function populateMemberProfiles(guild,rosterData){
  const result={created:0,updated:0,skipped:0,errors:0};
  for(const m of members){
   const saved=profile(guild.id,m.id);
+  const isOracle=[m.username,m.displayName,m.globalName].some(n=>String(n||'').trim().toLowerCase()==='oracle');
+  if(isOracle){
+   if(saved?.messageId&&saved.automatic!==false){try{await (await channel.messages.fetch(saved.messageId)).delete();await removeProfile(guild.id,m.id)}catch(e){console.warn('Oracle card cleanup:',e.message)}}
+   result.skipped++;continue;
+  }
   if(saved?.optedOut){result.skipped++;continue}
   try{
    const user=await guild.client.users.fetch(m.id);
