@@ -64,7 +64,7 @@ export async function applyLayout(guild){const bot=await guild.members.fetchMe()
 for(let j=0;j<section.channels.length;j++){const name=section.channels[j],keys=[norm(name),...(aliases[norm(name)]||[])];let ch=guild.channels.cache.find(x=>x.type===ChannelType.GuildText&&keys.includes(norm(x.name)));if(!ch){ch=await guild.channels.create({name,type:ChannelType.GuildText,parent:cat.id,reason:'Owner-approved LumiVibe layout'});report.push('Created #'+name)}else{if(ch.parentId!==cat.id){await ch.setParent(cat.id,{lockPermissions:false,reason:'Owner-approved layout; preserve channel permissions'});report.push('Moved #'+ch.name)}if(norm(ch.name)!==norm(name))await ch.setName(name,'Owner-approved LumiVibe naming')}await ch.setPosition(j,{reason:'Owner-approved channel order'})}
 }return report}
 
-export async function applyLayoutOnce(guild){const s=state(guild.id);if(s.layoutVersion===1)return {alreadyDone:true};const report=await applyLayout(guild);s.layoutVersion=1;await save();return {alreadyDone:false,report}}
+export async function applyLayoutOnce(guild){const s=state(guild.id);if(s.layoutVersion>=1)return {alreadyDone:true};const report=await applyLayout(guild);s.layoutVersion=1;await save();return {alreadyDone:false,report}}
 
 const extraChannelDestinations={
  'game-announcements':'✦ GAMING','gift-codes':'✦ GAMING',
@@ -95,7 +95,7 @@ export async function populateEmptySectionsOnce(guild){
  const report=[];const findCat=name=>guild.channels.cache.find(x=>x.type===ChannelType.GuildCategory&&norm(x.name)===norm(name));
  const voice=findCat('✦ VOICE LOUNGE');const control=findCat('✦ LUMIRA CONTROL');
  if(!voice||!control)throw Error('Voice Lounge or Lumira Control category missing');
- const voiceNames=['General VC','Gaming VC','Chill VC'];
+ const voiceNames=['Voice','Gaming','Chilling','music'];
  for(let i=0;i<voiceNames.length;i++){
   const name=voiceNames[i];let ch=guild.channels.cache.find(x=>x.type===ChannelType.GuildVoice&&norm(x.name)===norm(name));
   if(!ch){ch=await guild.channels.create({name,type:ChannelType.GuildVoice,parent:voice.id,reason:'Owner-requested voice lounge channels'});report.push('Created voice '+name)}
@@ -104,8 +104,8 @@ export async function populateEmptySectionsOnce(guild){
  }
  // Explicitly deny general visibility. Only the owner and bot receive new access grants.
  await control.permissionOverwrites.edit(guild.roles.everyone.id,{ViewChannel:false},{reason:'Private bot control category'});
- await control.permissionOverwrites.edit(guild.ownerId,{ViewChannel:true},{reason:'Owner access to bot control'});
- await control.permissionOverwrites.edit(me.id,{ViewChannel:true,ManageChannels:true},{reason:'Lumira access to bot control'});
+ await control.permissionOverwrites.edit(await guild.fetchOwner(),{ViewChannel:true},{reason:'Owner access to bot control'});
+ await control.permissionOverwrites.edit(me,{ViewChannel:true,ManageChannels:true},{reason:'Lumira access to bot control'});
  for(const name of ['liveboard','bot-logs']){
   let ch=guild.channels.cache.find(x=>x.type===ChannelType.GuildText&&norm(x.name)===norm(name));
   if(!ch){ch=await guild.channels.create({name,type:ChannelType.GuildText,parent:control.id,permissionOverwrites:[
@@ -115,8 +115,8 @@ export async function populateEmptySectionsOnce(guild){
   ],reason:'Owner-requested private Lumira control'});report.push('Created private #'+name)}
   else if(ch.parentId!==control.id){await ch.setParent(control.id,{lockPermissions:false,reason:'Owner-requested Lumira control'});report.push('Moved #'+name)}
   await ch.permissionOverwrites.edit(guild.roles.everyone.id,{ViewChannel:false},{reason:'Keep Lumira control private'});
-  await ch.permissionOverwrites.edit(guild.ownerId,{ViewChannel:true},{reason:'Owner-only Lumira control'});
-  await ch.permissionOverwrites.edit(me.id,{ViewChannel:true},{reason:'Lumira bot control access'});
+  await ch.permissionOverwrites.edit(await guild.fetchOwner(),{ViewChannel:true},{reason:'Owner-only Lumira control'});
+  await ch.permissionOverwrites.edit(me,{ViewChannel:true},{reason:'Lumira bot control access'});
  }
  s.layoutVersion=3;await save();return {alreadyDone:false,report};
 }
@@ -149,4 +149,34 @@ export async function reconcileLegacyChannelsOnce(guild){
   }
  }
  s.layoutVersion=4;await save();return {alreadyDone:false,report};
+}
+
+export async function organizeEverythingOnce(guild){
+ const s=state(guild.id);if(s.organizedVersion===1)return {alreadyDone:true};
+ const me=await guild.members.fetchMe();if(!me.permissions.has(PermissionFlagsBits.ManageChannels))throw Error('Manage Channels required');
+ const groups=[
+  {cat:'✦ ARRIVALS',names:['welcome','new-members','goodbye']},
+  {cat:'✦ COMMONS',names:['general','talk','media','music','i-m-pissed-off','carl-bot']},
+  {cat:'✦ INTERESTS',names:['anime-manga','shug-s-kitchen','lumi-s-art','stars-charts-and-hoe-roscopes','gracie-s-horoscopes','cards']},
+  {cat:'✦ GAMING',names:['game-announcements','game-updates','gift-codes','sword-x-staff','general-gaming']},
+  {cat:'✦ ARCHIVES',names:['scrapbook','milestones']},
+  {cat:'✦ VOICE LOUNGE',names:['voice','gaming','chilling','music']},
+  {cat:'✦ PRIVATE GALLERIES',names:['lumi-private','lumi-sxs','sage-sxs','heart-of-the-sea','a-father-s-promise','bot-carl-private']},
+  {cat:'✦ LUMIRA CONTROL',names:['liveboard','bot-logs']}
+ ];
+ const report=[];
+ for(let i=0;i<groups.length;i++){
+  const group=groups[i],cat=guild.channels.cache.find(x=>x.type===ChannelType.GuildCategory&&norm(x.name)===norm(group.cat));
+  if(!cat){report.push('Missing '+group.cat);continue}
+  await cat.setPosition(i,{reason:'Owner-requested LumiVibe category organization'});
+  for(let j=0;j<group.names.length;j++){
+   const key=group.names[j];
+   const candidates=guild.channels.cache.filter(x=>(x.type===ChannelType.GuildVoice||x.type===ChannelType.GuildText)&&norm(x.name)===key);
+   const ch=candidates.find(x=>group.cat==='✦ VOICE LOUNGE'?x.type===ChannelType.GuildVoice:x.type===ChannelType.GuildText);
+   if(!ch)continue;
+   if(ch.parentId!==cat.id){await ch.setParent(cat.id,{lockPermissions:false,reason:'Owner-requested organized sidebar'});report.push('Moved '+ch.name+' to '+group.cat)}
+   await ch.setPosition(j,{reason:'Owner-requested organized channel order'});
+  }
+ }
+ s.organizedVersion=1;await save();return {alreadyDone:false,report};
 }
