@@ -187,10 +187,10 @@ client.once(Events.ClientReady,async c=>{
  console.log('Lumira online as '+c.user.tag);
  console.log('Gateway intents:',intents.join(','),'guild count:',c.guilds.cache.size);
  for(const guild of c.guilds.cache.values()){console.log('Guild:',guild.id,'name:',guild.name,'bot member cached:',Boolean(guild.members.me));if(guild.id==='1472157525490139174')publishCuratedCards(guild).catch(e=>console.error('Immediate curated cards:',e.message));syncRoster(guild).then(()=>guild.id==='1472157525490139174'?populateMemberProfiles(guild,roster(guild)).then(()=>publishCuratedCards(guild)):null).catch(e=>console.error('Member card population:',e.message));if(guild.id==='1472157525490139174'){
-   // Visual classification is low priority. Run only a tiny batch every six hours.
-   const runVisual=()=>organizeVisualEmojis(guild,{maxScans:3}).catch(e=>console.error('Visual emoji organization failed:',e.message));
-   setTimeout(runVisual,15*60*1000).unref();
-   setInterval(runVisual,6*60*60*1000).unref();
+   // Continue subject-based visual naming in moderate batches until all eligible emojis are processed.
+   const runVisual=()=>organizeVisualEmojis(guild,{maxScans:8}).catch(e=>console.error('Visual emoji organization failed:',e.message));
+   setTimeout(runVisual,60*1000).unref();
+   setInterval(runVisual,30*60*1000).unref();
   }if(guild.id==='1472157525490139174'){for(const [label,fn] of [['layout',applyLayoutOnce],['legacy cleanup',finishLayoutOnce],['voice and control',populateEmptySectionsOnce],['legacy organization',reconcileLegacyChannelsOnce],['full organization',organizeEverythingOnce],['restore original channel names',restoreOriginalChannelsOnce],['duplicate cleanup and control posts',finishCleanupAndControlOnce],['Gracie sticker authorization',authorizeGracieStickerImportOnce],['sticker directory',refreshStickerDirectory],['emoji naming',organizeEmojiNamesOnce],['emoji directory',publishEmojiDirectoryOnce],['repair control formatting',repairControlFormattingOnce],['liveboard design',refreshLiveboard]]){try{const result=await fn(guild);console.log('LumiVibe '+label+':',JSON.stringify(result))}catch(e){console.error('LumiVibe '+label+' failed:',e.stack||e.message)}}}}
 
  if(process.env.GEMINI_API_KEY){try{const answer=await replyTo('Reply with one short friendly greeting.');console.log('Gemini startup self-test succeeded; response length:',answer.length)}catch(error){console.error('Gemini startup self-test failed:',error.message)}}
