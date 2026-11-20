@@ -8,11 +8,11 @@ export async function socialLoreCommand(i){
  try{
   if(sub==='browse'||sub==='search'){
    const entries=loreEntries(i.guildId,{term:i.options.getString('query')||''});
-   return i.reply({content:entries.length?'📖 **LumiVibe Lorebook**\\n'+entries.slice(0,10).map(e=>'**'+e.title+'** ['+e.kind+'] ('+e.id+')\\n'+e.text).join('\\n\\n'):'No matching approved lore yet.',flags:MessageFlags.Ephemeral,allowedMentions:safe});
+   return i.reply({content:entries.length?'📖 **LumiVibe Lorebook**\n'+entries.slice(0,10).map(e=>'**'+e.title+'** ['+e.kind+'] ('+e.id+')\n'+e.text).join('\n\n'):'No matching approved lore yet.',flags:MessageFlags.Ephemeral,allowedMentions:safe});
   }
   if(sub==='pending'){
    const entries=pendingLore(i.guildId,i.user.id);
-   return i.reply({content:entries.length?entries.map(e=>e.id+' — '+e.title+' ('+e.kind+')').join('\\n'):'No entries awaiting your approval.',flags:MessageFlags.Ephemeral,allowedMentions:safe});
+   return i.reply({content:entries.length?entries.map(e=>e.id+' — '+e.title+' ('+e.kind+')').join('\n'):'No entries awaiting your approval.',flags:MessageFlags.Ephemeral,allowedMentions:safe});
   }
   if(sub==='approve'){
    const published=await approveLore(i.guildId,i.options.getString('id'),i.user.id);
