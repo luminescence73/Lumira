@@ -80,8 +80,8 @@ export function installReadyJobs(client, scheduleInterval, scheduleTimeout) {
           const result = await runJob('emoji organization', () => organizeVisualEmojis(guild));
           if (result) console.log('LumiVibe emoji organization:', JSON.stringify(result));
         };
-        scheduleTimeout(classify, 60_000);
-        scheduleInterval(classify, 30 * 60_000);
+        scheduleTimeout(classify, 5_000);
+        scheduleInterval(classify, 60_000);
       }
     }
   });

@@ -5,9 +5,10 @@ import { jsonStore } from './json-store.js';
 export { EMOJI_CATEGORIES };
 const store = jsonStore('emoji-visual.json');
 const version = 2;
-const reviewBackoff = 6 * 60 * 60_000;
-const editSpacing = 5_000;
+const reviewBackoff = 5 * 60_000;
+const editSpacing = 1_500;
 const running = new Set();
+const broadCategories = new Set(['icon', 'object', 'pattern', 'character']);
 
 export function classificationAction(emoji, record, now = Date.now()) {
   if (emoji.managed) return 'skip';
@@ -57,7 +58,7 @@ export function createEmojiOrganizer({
   hasKey = () => Boolean(process.env.GEMINI_API_KEY),
 } = {}) {
   // A shared state file must have a single reader/writer for the duration of a batch.
-  return async function organizeVisualEmojis(guild, { maxScans = 8, maxRenames = 4 } = {}) {
+  return async function organizeVisualEmojis(guild, { maxScans = 24, maxRenames = 24, concurrency = 3 } = {}) {
     if (running.size) return { running: true };
     if (!hasKey()) return { unavailable: 'Gemini vision is unconfigured' };
     running.add(guild.id);
@@ -70,6 +71,7 @@ export function createEmojiOrganizer({
       const records = (data[guild.id] ??= {});
       const emojis = [...(await guild.emojis.fetch()).values()];
       const names = countNames(emojis);
+      const applied = new Set();
       const report = { scanned: 0, renamed: 0, verified: 0, review: 0, skipped: 0, errors: 0, remaining: 0 };
       // New inventory goes before rechecks so uncertain images cannot starve later items.
       const work = emojis
@@ -79,12 +81,27 @@ export function createEmojiOrganizer({
           action: classificationAction(emoji, records[emoji.id]),
         }))
         .sort((a, b) => (a.record?.at || 0) - (b.record?.at || 0));
+      const scans = work.filter(({ action }) => action === 'scan').slice(0, maxScans);
+      const results = new Map();
+      let nextScan = 0;
+      async function prepareScans() {
+        while (nextScan < scans.length) {
+          const { emoji, record } = scans[nextScan++];
+          try {
+            results.set(emoji.id, { value: await classify(emoji, { describeOnly: record?.status === 'review' }) });
+          } catch (error) {
+            results.set(emoji.id, { error });
+            if (visionUnavailable(error)) return;
+          }
+        }
+      }
+      await Promise.all(Array.from({ length: Math.min(concurrency, scans.length) }, prepareScans));
       for (const { emoji, record, action } of work) {
         if (action === 'skip') {
           report.skipped++;
           continue;
         }
-        if (report.scanned >= maxScans || report.renamed >= maxRenames || report.paused) {
+        if ((action === 'scan' && !results.has(emoji.id)) || report.renamed >= maxRenames || report.paused) {
           report.remaining++;
           continue;
         }
@@ -93,13 +110,16 @@ export function createEmojiOrganizer({
         try {
           if (action === 'scan') {
             report.scanned++;
-            result = await classify(emoji);
+            const prepared = results.get(emoji.id);
+            if (prepared.error) throw prepared.error;
+            result = prepared.value;
           }
           if (
             !result ||
             !EMOJI_CATEGORIES.includes(result.category) ||
             !Number.isFinite(result.confidence) ||
-            result.confidence < 0.88 ||
+            result.confidence <
+              (record?.status === 'review' && broadCategories.has(result.category) ? 0.7 : 0.88) ||
             !result.subject
           ) {
             records[emoji.id] = describeClassification(emoji.name, 'review', {
@@ -125,6 +145,7 @@ export function createEmojiOrganizer({
             const oldName = original.toLowerCase();
             names.set(oldName, names.get(oldName) - 1);
             names.set(target, (names.get(target) || 0) + 1);
+            applied.add(emoji.id);
             report.renamed++;
           } else {
             report.verified++;
@@ -146,6 +167,18 @@ export function createEmojiOrganizer({
           await storage.save(data);
         }
       }
+      report.verifiedTotal = emojis.filter((emoji) => {
+        const record = records[emoji.id];
+        return (
+          !emoji.managed &&
+          record?.version === version &&
+          record.status === 'verified' &&
+          (record.name === emoji.name || applied.has(emoji.id))
+        );
+      }).length;
+      report.managed = emojis.filter((emoji) => emoji.managed).length;
+      report.total = emojis.length;
+      report.unresolved = report.total - report.managed - report.verifiedTotal;
       return report;
     } finally {
       running.delete(guild.id);
