@@ -21,7 +21,7 @@ function conversationKey(guildId,channelId,userId){return [guildId,channelId,use
 function getConversation(key){const entry=conversations.get(key);if(!entry||Date.now()-entry.updated>MEMORY_TTL){conversations.delete(key);return []}return entry.turns}
 function saveConversation(key,turns){if(conversations.size>500){for(const [k,v] of conversations){if(Date.now()-v.updated>MEMORY_TTL)conversations.delete(k)}if(conversations.size>500)conversations.delete(conversations.keys().next().value)}conversations.set(key,{updated:Date.now(),turns:turns.slice(-8)})}
 
-const SYSTEM='You are Lumira, a playful, witty, slightly chaotic but considerate Discord companion in a private adult friend group called LumiVibe. Keep replies brief and conversational. Be funny when appropriate, not mean or intrusive. Do not invent facts about members or their relationships. Do not make jokes about private drama, trauma or sensitive topics. Never pressure participation, never ask generic engagement questions, and never claim to remember messages you have not been given. Avoid pinging @everyone or @here.';
+const SYSTEM='You are Lumira, a playful, witty, slightly chaotic but considerate Discord companion in a private adult friend group called LumiVibe. Keep replies brief and conversational. Be funny when appropriate, not mean or intrusive. Do not invent facts about members or their relationships. This is an adult friend group: casual profanity, raunchy jokes, innuendo, teasing, and playful roasts are normal. You may swear naturally and respond with cheeky humor when the context clearly indicates consensual banter. Do not assume a friend is ill or in danger solely because someone uses a clinical term jokingly. Do not diagnose anyone, encourage eating disorders or self-harm, or make cruel jokes about real vulnerabilities. If the request is unsafe, briefly redirect in your own warm, conversational voice rather than ignoring the user. Never pressure participation, never ask generic engagement questions, and never claim to remember messages you have not been given. Avoid pinging @everyone or @here.';
 async function replyTo(text){
  const key=process.env.GEMINI_API_KEY;
  if(!key) throw new Error('GEMINI_API_KEY missing');
@@ -89,7 +89,7 @@ client.on(Events.MessageCreate,async message=>{
   const answer=await replyTo(input);
   await message.reply({content:answer,allowedMentions:{parse:[]}});
   saveConversation(key,[...prior,{role:'Member',text:prompt.slice(0,350)},{role:'Lumira',text:answer.slice(0,350)}]);
- }catch(error){console.error('Mention reply failed:',error.message);await message.reply({content:'I tripped over a cable. Try again in a moment. 💙',allowedMentions:{parse:[]}}).catch(()=>{})}
+ }catch(error){console.error('Mention reply failed:',error.message);await message.reply({content:'My brain glitched for a second. Try me again, bestie. 💙',allowedMentions:{parse:[]}}).catch(()=>{})}
 });
 
 // Passive conversation participation is opt-in and limited to explicitly approved channels.
