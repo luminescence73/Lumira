@@ -205,3 +205,45 @@ export async function restoreOriginalChannelsOnce(guild){
  if(gaming&&originalGame.parentId!==gaming.id)await originalGame.setParent(gaming.id,{lockPermissions:false});
  s.originalChannelFixVersion=1;await save();return {alreadyDone:false,report};
 }
+
+export async function finishCleanupAndControlOnce(guild){
+ const s=state(guild.id);if(s.finalCleanupVersion===1)return {alreadyDone:true};
+ const report=[];const all=()=>[...guild.channels.cache.values()];
+ const originalAstro=all().find(x=>x.type===ChannelType.GuildText&&norm(x.name)==='cosmic-chaos');
+ const originalGame=all().find(x=>x.type===ChannelType.GuildText&&norm(x.name)==='game-updates');
+ if(!originalAstro||!originalGame)throw Error('Preserved original channels not found; cleanup halted');
+ // User explicitly requested removal of duplicate channels, including the archived game-updates duplicate.
+ for(const ch of all()){
+  if(ch.type!==ChannelType.GuildText)continue;
+  if(ch.id===originalAstro.id||ch.id===originalGame.id)continue;
+  if(/^archive-(horoscopes|game-updates)-[a-z0-9]+$/.test(ch.name)||['gracies-horoscopes','gracie-s-horoscopes','stars-charts-and-hoe-roscopes'].includes(norm(ch.name))){
+   await ch.delete('Owner requested duplicate channel removal; original channels preserved');report.push('Deleted duplicate #'+ch.name);
+  }
+ }
+ const voice=guild.channels.cache.find(x=>x.type===ChannelType.GuildCategory&&norm(x.name)===norm('✦ VOICE LOUNGE'));
+ if(voice){
+  const originals=['voice','gaming','chilling','music'].map(n=>all().find(x=>x.type===ChannelType.GuildVoice&&norm(x.name)===n)).filter(Boolean);
+  // Extra voice channels were introduced by Lumira; never remove an occupied voice channel.
+  for(const name of ['general-vc','gaming-vc','chill-vc']){
+   const ch=all().find(x=>x.type===ChannelType.GuildVoice&&norm(x.name)===name&&x.parentId===voice.id);
+   if(ch&&originals.length===4){if(ch.members.size===0){await ch.delete('Remove redundant Lumira-created voice room');report.push('Deleted duplicate voice '+ch.name)}else report.push('Kept occupied voice '+ch.name)}
+  }
+ }
+ // Remove only empty categories, never a category still holding channels.
+ for(const cat of all().filter(x=>x.type===ChannelType.GuildCategory)){
+  if(!guild.channels.cache.some(x=>x.parentId===cat.id)){
+   await cat.delete('Owner requested removal of empty categories');report.push('Deleted empty category '+cat.name);
+  }
+ }
+ const control=guild.channels.cache.find(x=>x.type===ChannelType.GuildCategory&&norm(x.name)===norm('✦ LUMIRA CONTROL'));
+ if(!control)throw Error('Lumira Control category missing');
+ const live=all().find(x=>x.type===ChannelType.GuildText&&norm(x.name)==='liveboard'&&x.parentId===control.id);
+ const logs=all().find(x=>x.type===ChannelType.GuildText&&norm(x.name)==='bot-logs'&&x.parentId===control.id);
+ if(!live||!logs)throw Error('Lumira Control channels missing');
+ const me=await guild.members.fetchMe();
+ if(!me.permissionsIn(live).has(PermissionFlagsBits.SendMessages)||!me.permissionsIn(logs).has(PermissionFlagsBits.SendMessages))throw Error('Lumira cannot send messages in control channels');
+ await live.send({content:'🦋 **LumiVibe Liveboard**\\nThis is the private home for Lumira activity and server highlights.\\n\\n**Available now:** member directory, scrapbook, games, event reminders, and server customization.\\n**Note:** This is a setup board, not a live-updating dashboard yet.'});
+ await logs.send({content:'🔐 **Lumira Bot Logs**\\nPrivate administrative log channel initialized.\\n**Completed setup:** organized server channels, preserved original #cosmic-chaos and #game-updates, removed requested duplicates and empty categories.\\nFurther bot activity logging will require event handlers; this message confirms setup only.'});
+ report.push('Posted setup messages in liveboard and bot-logs');
+ s.finalCleanupVersion=1;await save();return {alreadyDone:false,report};
+}
