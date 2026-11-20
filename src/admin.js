@@ -247,3 +247,18 @@ export async function finishCleanupAndControlOnce(guild){
  report.push('Posted setup messages in liveboard and bot-logs');
  s.finalCleanupVersion=1;await save();return {alreadyDone:false,report};
 }
+
+export async function publishEmojiDirectoryOnce(guild){
+ const s=state(guild.id);if(s.emojiDirectoryVersion===1)return {alreadyDone:true};
+ const control=guild.channels.cache.find(x=>x.type===ChannelType.GuildCategory&&norm(x.name)===norm('✦ LUMIRA CONTROL'));
+ const channel=guild.channels.cache.find(x=>x.type===ChannelType.GuildText&&x.parentId===control?.id&&norm(x.name)==='liveboard');
+ if(!channel)throw Error('Liveboard not available for emoji directory');
+ const emojis=[...(await guild.emojis.fetch()).values()].sort((a,b)=>a.name.localeCompare(b.name));
+ const groups=[['Static',emojis.filter(x=>!x.animated)],['Animated',emojis.filter(x=>x.animated)]];
+ const lines=['🧩 **LumiVibe Emoji Directory**','Organized by type and alphabetically. This does not rename emojis or change their IDs.'];
+ for(const [label,items] of groups){lines.push('**'+label+' ('+items.length+')**');if(!items.length){lines.push('None');continue}for(const e of items)lines.push(e.toString()+' `:'+e.name+':`')}
+ let page='';let posted=0;
+ for(const line of lines){if(page.length+line.length+2>1750){await channel.send({content:page});posted++;page=''}page+=(page?'\n':'')+line}
+ if(page){await channel.send({content:page});posted++}
+ s.emojiDirectoryVersion=1;await save();return {count:emojis.length,messages:posted};
+}
