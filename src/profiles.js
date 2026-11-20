@@ -23,7 +23,8 @@ export async function populateMemberProfiles(guild,rosterData){
    if(saved?.messageId&&saved.automatic!==false){try{await (await channel.messages.fetch(saved.messageId)).delete();await removeProfile(guild.id,m.id)}catch(e){console.warn('Oracle card cleanup:',e.message)}}
    result.skipped++;continue;
   }
-  if(saved?.optedOut){result.skipped++;continue}
+  // Curated cards are maintained by publishCuratedCards; never replace their embeds with generic ones.
+  if(saved?.optedOut||saved?.curated){result.skipped++;continue}
   try{
    const user=await guild.client.users.fetch(m.id);
    if(user.bot){result.skipped++;continue}
@@ -32,7 +33,7 @@ export async function populateMemberProfiles(guild,rosterData){
    let post=null;
    if(saved?.messageId){try{post=await channel.messages.fetch(saved.messageId);await post.edit({embeds:[embed],allowedMentions:{parse:[]}});result.updated++}catch(e){post=null}}
    if(!post){post=await channel.send({embeds:[embed],allowedMentions:{parse:[]}});result.created++}
-   await setProfile(guild.id,m.id,{about,messageId:post.id,updatedAt:Date.now(),automatic:!saved?.about});
+   await setProfile(guild.id,m.id,{about,messageId:post.id,updatedAt:Date.now(),automatic:saved?.automatic!==false});
    await new Promise(resolve=>setTimeout(resolve,400));
   }catch(e){result.errors++;console.warn('Member card',m.id,e.message)}
  }
