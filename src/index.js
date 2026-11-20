@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import {loadAdmin,config,authorize,privateAccess,stage,discard,proposals,preview,applyGuild,layoutPreview,makeChannel,imageForEmoji,imageForSticker} from './admin.js';
 import {loadRoster,syncRoster,roster,findMembers} from './roster.js';
 import {loadEvents,schedule,upcoming,dueEvents} from './events.js';
 import {loadPlayground,gameCard,vote,leaderboard,award,recentAwards} from './playground.js';
@@ -20,6 +21,7 @@ await loadFeatures();
 await loadPlayground();
 await loadEvents();
 await loadRoster();
+await loadAdmin();
 const client=new Client({intents,partials:[Partials.Message,Partials.Channel,Partials.Reaction]});
 client.on('raw',packet=>{if(packet.t==='MESSAGE_CREATE')console.log('Gateway MESSAGE_CREATE received; guild:',Boolean(packet.d?.guild_id),'mentions bot:',Array.isArray(packet.d?.mentions)&&packet.d.mentions.some(u=>u.id===client.user?.id),'content present:',Boolean(packet.d?.content))});
 const recentMessages=new Map();
@@ -185,14 +187,24 @@ client.once(Events.ClientReady,async c=>{
  .addSubcommand(s=>s.setName('sync').setDescription('Refresh member IDs and names'))
  .addSubcommand(s=>s.setName('status').setDescription('Show directory completeness and count'))
  .addSubcommand(s=>s.setName('find').setDescription('Find a member by username or nickname').addStringOption(o=>o.setName('name').setDescription('Member name').setRequired(true))).toJSON();
+ const adminCommand=new SlashCommandBuilder().setName('lumira-admin').setDescription('Owner-only channel and expression administration')
+ .addSubcommand(s=>s.setName('audit').setDescription('Preview permission restrictions'))
+ .addSubcommand(s=>s.setName('apply').setDescription('Apply owner-approved permission changes'))
+ .addSubcommand(s=>s.setName('layout').setDescription('Preview server channel organization'))
+ .addSubcommand(s=>s.setName('cleanup').setDescription('Review empty and duplicate channel names'))
+ .addSubcommand(s=>s.setName('create').setDescription('Create a channel').addStringOption(o=>o.setName('name').setDescription('Lowercase name with hyphens').setRequired(true)).addStringOption(o=>o.setName('kind').setDescription('Channel type').setRequired(true).addChoices({name:'Text',value:'text'},{name:'Voice',value:'voice'},{name:'Category',value:'category'})).addChannelOption(o=>o.setName('category').setDescription('Optional parent category')))
+ .addSubcommand(s=>s.setName('authorize').setDescription('Grant or revoke a named member permission').addUserOption(o=>o.setName('member').setDescription('Exact Discord member').setRequired(true)).addStringOption(o=>o.setName('permission').setDescription('Access type').setRequired(true).addChoices({name:'Stickers',value:'sticker'},{name:'Emojis',value:'emoji'},{name:'Invites',value:'invite'})).addBooleanOption(o=>o.setName('allow').setDescription('Grant access?').setRequired(true)))
+ .addSubcommand(s=>s.setName('private').setDescription('Authorize member for one private channel').addChannelOption(o=>o.setName('channel').setDescription('Private channel').setRequired(true)).addUserOption(o=>o.setName('member').setDescription('Allowed member').setRequired(true)).addBooleanOption(o=>o.setName('allow').setDescription('Grant access?').setRequired(true)))
+ .addSubcommand(s=>s.setName('emoji').setDescription('Upload a custom emoji from an image attachment').addStringOption(o=>o.setName('name').setDescription('Emoji name').setRequired(true)).addAttachmentOption(o=>o.setName('image').setDescription('Image attachment').setRequired(true)))
+ .addSubcommand(s=>s.setName('sticker').setDescription('Upload a sticker from an image attachment').addStringOption(o=>o.setName('name').setDescription('Sticker name').setRequired(true)).addStringOption(o=>o.setName('description').setDescription('Sticker description').setRequired(true)).addAttachmentOption(o=>o.setName('image').setDescription('Image attachment').setRequired(true))).toJSON();
  const forgetCommand=new SlashCommandBuilder().setName('lumira-forget').setDescription('Clear your recent Lumira conversation in this channel').toJSON();
  try {
    if(process.env.DISCORD_GUILD_ID){
      const guild=await c.guilds.fetch(process.env.DISCORD_GUILD_ID);
-     await guild.commands.set([forgetCommand,memoryCommand,loreCommand,scrapbookCommand,egoCommand,controlCommand,vibeCommand,privacyCommand,channelCommand,studioCommand,playCommand,personalityCommand,eventCommand,rosterCommand]);
+     await guild.commands.set([forgetCommand,memoryCommand,loreCommand,scrapbookCommand,egoCommand,controlCommand,vibeCommand,privacyCommand,channelCommand,studioCommand,playCommand,personalityCommand,eventCommand,rosterCommand,adminCommand]);
      console.log('Registered /lumira-forget in configured guild');
    } else {
-     await c.application.commands.set([forgetCommand,memoryCommand,loreCommand,scrapbookCommand,egoCommand,controlCommand,vibeCommand,privacyCommand,channelCommand,studioCommand,playCommand,personalityCommand,eventCommand,rosterCommand]);
+     await c.application.commands.set([forgetCommand,memoryCommand,loreCommand,scrapbookCommand,egoCommand,controlCommand,vibeCommand,privacyCommand,channelCommand,studioCommand,playCommand,personalityCommand,eventCommand,rosterCommand,adminCommand]);
      console.log('Registered /lumira-forget globally (may take time to appear)');
    }
  }catch(error){console.error('Slash command registration failed:',error)}
@@ -220,7 +232,28 @@ client.on(Events.InteractionCreate,async interaction=>{
   try{if(!['autoLore','autoScrapbook','spontaneous','roasts'].includes(key))throw Error('Invalid control');await setSetting(interaction.guildId,key,!settings(interaction.guildId)[key]);return interaction.update(liveboard(interaction.guildId))}
   catch(e){return interaction.reply({content:'Could not update: '+e.message,flags:MessageFlags.Ephemeral})}
  }
- if(!interaction.isChatInputCommand()||!['lumira-forget','lumira-memory','lumira-lore','lumira-scrapbook','lumira-ego','lumira-control','lumira-vibe','lumira-privacy','lumira-channels','lumira-studio','lumira-play','lumira-personality','lumira-event','lumira-members'].includes(interaction.commandName))return;
+ if(!interaction.isChatInputCommand()||!['lumira-forget','lumira-memory','lumira-lore','lumira-scrapbook','lumira-ego','lumira-control','lumira-vibe','lumira-privacy','lumira-channels','lumira-studio','lumira-play','lumira-personality','lumira-event','lumira-members','lumira-admin'].includes(interaction.commandName))return;
+ if(interaction.commandName==='lumira-admin'){
+  if(!interaction.inGuild()||interaction.guild.ownerId!==interaction.user.id)return interaction.reply({content:'Only the server owner can administer LumiVibe.',flags:MessageFlags.Ephemeral});
+  const g=interaction.guildId,sub=interaction.options.getSubcommand();
+  try{
+   if(sub==='audit'){const changes=preview(interaction.guild);await stage(g,{type:'permissions'});return interaction.reply({content:'🔐 **Permission preview**\\n'+(changes.join('\\n')||'Baseline permissions already appear restricted.')+'\\n**Important:** Existing elevated roles, channel overrides and Discord Administrator permission can bypass these defaults. /lumira-admin apply will change the @everyone baseline and explicitly configured private channels only. Sticker and emoji creation share a Discord permission; authorized creators may be able to create both.\\nUse /lumira-admin apply to confirm.',flags:MessageFlags.Ephemeral})}
+   if(sub==='apply'){const p=proposals(g);if(!p||p.type!=='permissions'||Date.now()-p.createdAt>15*60000)throw Error('Run /lumira-admin audit within 15 minutes first.');await interaction.deferReply({flags:MessageFlags.Ephemeral});const result=await applyGuild(interaction.guild);return interaction.editReply('🔐 Applied baseline restrictions and '+result.channels+' explicitly configured private channels. Review elevated roles and overrides manually for any bypasses.')}
+   if(sub==='layout'){const rows=layoutPreview(interaction.guild);return interaction.reply({content:'🗂️ **Current channel layout**\\n'+rows.slice(0,35).map(x=>(x.category?'['+x.category+'] ':'')+x.name).join('\\n')+'\\nPreview only. No channel moved or renamed.',flags:MessageFlags.Ephemeral})}
+   if(sub==='cleanup'){const channels=layoutPreview(interaction.guild),seen=new Set(),duplicates=[];for(const x of channels){const k=x.category+':'+x.name;if(seen.has(k))duplicates.push(x.name);seen.add(k)}return interaction.reply({content:'🧹 **Cleanup preview**\\nDuplicate names in same category: '+(duplicates.join(', ')||'None detected')+'\\nNo channels were deleted.',flags:MessageFlags.Ephemeral})}
+   if(sub==='authorize'){const user=interaction.options.getUser('member'),kind=interaction.options.getString('permission'),allow=interaction.options.getBoolean('allow');await authorize(g,kind,user.id,allow);return interaction.reply({content:(allow?'Saved authorization for ':'Revoked authorization for ')+user.username+' ('+kind+'). Run /lumira-admin audit then apply to enforce role permissions.',flags:MessageFlags.Ephemeral})}
+   if(sub==='private'){const channel=interaction.options.getChannel('channel'),user=interaction.options.getUser('member'),allow=interaction.options.getBoolean('allow');if(channel.guildId!==g)throw Error('Channel must be in this server');await privateAccess(g,channel.id,user.id,allow);return interaction.reply({content:'Private access preference saved for '+user.username+' in '+channel.name+'. Run audit then apply to enforce.',flags:MessageFlags.Ephemeral})}
+   if(sub==='create'){const name=interaction.options.getString('name'),kind=interaction.options.getString('kind'),parent=interaction.options.getChannel('category');if(parent&&parent.type!==4)throw Error('Parent must be a category');const ch=await makeChannel(interaction.guild,name,kind,parent?.id);return interaction.reply({content:'Created '+ch.name+'.',flags:MessageFlags.Ephemeral})}
+   if(sub==='emoji'||sub==='sticker'){
+    const a=interaction.options.getAttachment('image'),name=interaction.options.getString('name');if(!/^[a-zA-Z0-9_]{2,32}$/.test(name))throw Error('Use 2–32 letters, digits or underscores');
+    if(!a.contentType?.startsWith('image/')||a.size>5e6)throw Error('Attach an image under 5 MB.');
+    await interaction.deferReply({flags:MessageFlags.Ephemeral});
+    if(sub==='emoji'){const bytes=await imageForEmoji(a.url);await interaction.guild.emojis.create({attachment:bytes,name,reason:'Owner-approved Lumira emoji'});}
+    else{const bytes=await imageForSticker(a.url);await interaction.guild.stickers.create({file:bytes,name,description:interaction.options.getString('description'),tags:'🦋',reason:'Owner-approved Lumira sticker'});}
+    return interaction.editReply('✨ Uploaded '+sub+' **'+name+'**.');
+   }
+  }catch(e){console.error('Lumira admin:',e.message);return interaction.deferred?interaction.editReply({content:'Admin action failed: '+e.message}):interaction.reply({content:'Admin action failed: '+e.message,flags:MessageFlags.Ephemeral})}
+ }
  if(interaction.commandName==='lumira-members'){
   if(!interaction.inGuild()||interaction.guild.ownerId!==interaction.user.id)return interaction.reply({content:'Server owner only.',flags:MessageFlags.Ephemeral});
   const sub=interaction.options.getSubcommand(),g=interaction.guildId;
