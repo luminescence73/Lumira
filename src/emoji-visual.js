@@ -22,8 +22,8 @@ async function classify(emoji){
  });
  if(!response.ok)throw Error('Vision request '+response.status);
  const body=await response.json();
- const raw=body.candidates?.[0]?.content?.parts?.map(x=>x.text||'').join('')||'';
- const data=JSON.parse(raw);
+ const responseText=body.candidates?.[0]?.content?.parts?.map(x=>x.text||'').join('')||'';
+ const data=JSON.parse(responseText);
  if(!allowed.includes(data.category)||!Number.isFinite(Number(data.confidence)))return {category:'unknown',subject:'',confidence:0};
  return {category:data.category,subject:cleanName(data.subject),confidence:Number(data.confidence)};
 }
