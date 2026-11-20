@@ -36,7 +36,7 @@ export async function applyGuild(guild){
  for(const [id,ids] of Object.entries(s.privateChannels)){const channel=await guild.channels.fetch(id).catch(()=>null);if(!channel||channel.isThread?.()||!channel.permissionOverwrites)continue;
  await channel.permissionOverwrites.edit(guild.roles.everyone.id,{ViewChannel:false}, {reason:'Lumira owner-approved private channel'});
  await channel.permissionOverwrites.edit(bot.id,{ViewChannel:true,ManageChannels:true},{reason:'Lumira private channel bot access'});
- for(const overwrite of channel.permissionOverwrites.cache.values())if(overwrite.type===1&&!ids.includes(overwrite.id)&&overwrite.id!==guild.ownerId&&overwrite.id!==bot.id)await overwrite.delete('Lumira owner-approved private channel access review');
+
  for(const uid of ids){const member=await guild.members.fetch(uid).catch(()=>null);if(member)await channel.permissionOverwrites.edit(uid,{ViewChannel:true},{reason:'Lumira explicitly authorized access'})}
  channels++;
  }
