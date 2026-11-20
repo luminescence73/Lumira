@@ -8,7 +8,8 @@
   },
   "scripts": {
     "start": "node src/index.js",
-    "register": "node src/register.js"
+    "register": "node src/register.js",
+    "check": "node scripts/check-syntax.js && node --test"
   },
   "dependencies": {
     "discord.js": "^14.22.1",
