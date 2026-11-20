@@ -4,7 +4,7 @@ import { EventEmitter } from 'node:events';
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { ChannelType, Events, GatewayIntentBits, MessageFlags } from 'discord.js';
+import { ChannelType, Events, GatewayIntentBits, MessageFlags, Partials } from 'discord.js';
 import sharp from 'sharp';
 
 const directory = await mkdtemp(path.join(tmpdir(), 'lumira-integration-'));
@@ -108,6 +108,7 @@ test('startup loads persisted state, logs into the injected gateway and register
   assert.deepEqual(commands.map((command) => command.name).sort(), [...commandNames].sort());
   assert.equal(commandDefinitions().length, 18);
   assert.ok(createClient().options.intents.has(GatewayIntentBits.GuildExpressions));
+  assert.ok(createClient().options.partials.includes(Partials.GuildMember));
   const { settings } = await import('../src/features.js');
   assert.equal(settings('legacy-guild').roasts, false);
   assert.equal(settings('legacy-guild').photoBooth, true);

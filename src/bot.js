@@ -32,7 +32,7 @@ export function createClient({ memberEvents = process.env.LUMIRA_MEMBERS_INTENT 
     GatewayIntentBits.GuildVoiceStates,
   ];
   if (memberEvents) intents.push(GatewayIntentBits.GuildMembers);
-  return new Client({ intents, partials: [Partials.Message, Partials.Channel, Partials.Reaction] });
+  return new Client({ intents, partials: [Partials.Message, Partials.Channel, Partials.Reaction, Partials.GuildMember] });
 }
 
 export function installBot(client, { scheduleInterval = interval, scheduleTimeout = timeout } = {}) {
