@@ -5,6 +5,7 @@ import {organizeVisualEmojis} from './emoji-visual.js';
 import {quotaReady,quotaDelay,isQuotaFailure,retryDelay} from './gemini-quota.js';
 import {loadAdmin,config,authorize,privateAccess,stage,discard,proposals,preview,applyGuild,layoutPreview,makeChannel,imageForEmoji,imageForSticker,layoutPlan,applyLayout,applyLayoutOnce,finishLayoutOnce,populateEmptySectionsOnce,reconcileLegacyChannelsOnce,organizeEverythingOnce,restoreOriginalChannelsOnce,finishCleanupAndControlOnce,publishEmojiDirectoryOnce,repairControlFormattingOnce,organizeEmojiNamesOnce,refreshLiveboard,authorizeGracieStickerImportOnce,refreshStickerDirectory} from './admin.js';
 import {loadRoster,syncRoster,roster,findMembers} from './roster.js';
+import {loadProfiles,profile,setProfile,removeProfile,profileEmbed,profileChannel} from './profiles.js';
 import {loadEvents,schedule,upcoming,dueEvents} from './events.js';
 import {loadPlayground,gameCard,vote,leaderboard,award,recentAwards} from './playground.js';
 import {renderCard,studioBoard,generateImage} from './visual.js';
@@ -25,6 +26,7 @@ await loadFeatures();
 await loadPlayground();
 await loadEvents();
 await loadRoster();
+await loadProfiles();
 await loadAdmin();
 const client=new Client({intents,partials:[Partials.Message,Partials.Channel,Partials.Reaction]});
 client.on('raw',packet=>{if(packet.t==='MESSAGE_CREATE')console.log('Gateway MESSAGE_CREATE received; guild:',Boolean(packet.d?.guild_id),'mentions bot:',Array.isArray(packet.d?.mentions)&&packet.d.mentions.some(u=>u.id===client.user?.id),'content present:',Boolean(packet.d?.content))});
@@ -205,6 +207,10 @@ client.once(Events.ClientReady,async c=>{
  .addSubcommand(s=>s.setName('add').setDescription('Save an approved piece of server history').addStringOption(o=>o.setName('story').setDescription('History, event, or lore (max 1500 characters)').setRequired(true).setMaxLength(1500)))
  .addSubcommand(s=>s.setName('list').setDescription('Read saved server history'))
  .addSubcommand(s=>s.setName('remove').setDescription('Remove a history entry').addIntegerOption(o=>o.setName('number').setDescription('Entry number').setRequired(true).setMinValue(1))).toJSON();
+ const profileCommand=new SlashCommandBuilder().setName('lumira-profile').setDescription('Create or manage your own card in #cards')
+ .addSubcommand(s=>s.setName('create').setDescription('Publish or update your own profile').addStringOption(o=>o.setName('about').setDescription('What would you like people to know?').setRequired(true).setMinLength(3).setMaxLength(500)))
+ .addSubcommand(s=>s.setName('view').setDescription('View your saved profile'))
+ .addSubcommand(s=>s.setName('delete').setDescription('Remove your profile from #cards')).toJSON();
  const scrapbookCommand=new SlashCommandBuilder().setName('lumira-scrapbook').setDescription('Save and browse memorable public posts')
  .addSubcommand(s=>s.setName('save').setDescription('Save a public message by its link').addStringOption(o=>o.setName('link').setDescription('Discord message link').setRequired(true)))
  .addSubcommand(s=>s.setName('list').setDescription('Browse saved moments'))
@@ -276,10 +282,10 @@ client.once(Events.ClientReady,async c=>{
  try {
    if(process.env.DISCORD_GUILD_ID){
      const guild=await c.guilds.fetch(process.env.DISCORD_GUILD_ID);
-     await guild.commands.set([forgetCommand,memoryCommand,loreCommand,historyCommand,scrapbookCommand,egoCommand,controlCommand,vibeCommand,privacyCommand,channelCommand,studioCommand,playCommand,personalityCommand,eventCommand,rosterCommand,adminCommand]);
+     await guild.commands.set([forgetCommand,memoryCommand,loreCommand,historyCommand,profileCommand,scrapbookCommand,egoCommand,controlCommand,vibeCommand,privacyCommand,channelCommand,studioCommand,playCommand,personalityCommand,eventCommand,rosterCommand,adminCommand]);
      console.log('Registered /lumira-forget in configured guild');
    } else {
-     await c.application.commands.set([forgetCommand,memoryCommand,loreCommand,historyCommand,scrapbookCommand,egoCommand,controlCommand,vibeCommand,privacyCommand,channelCommand,studioCommand,playCommand,personalityCommand,eventCommand,rosterCommand,adminCommand]);
+     await c.application.commands.set([forgetCommand,memoryCommand,loreCommand,historyCommand,profileCommand,scrapbookCommand,egoCommand,controlCommand,vibeCommand,privacyCommand,channelCommand,studioCommand,playCommand,personalityCommand,eventCommand,rosterCommand,adminCommand]);
      console.log('Registered /lumira-forget globally (may take time to appear)');
    }
  }catch(error){console.error('Slash command registration failed:',error)}
@@ -488,6 +494,28 @@ client.on(Events.InteractionCreate,async interaction=>{
    await deleteHistory(interaction.guildId,interaction.options.getInteger('number'));
    return interaction.reply({content:'History entry removed. 💙',flags:MessageFlags.Ephemeral});
   }catch(e){return interaction.reply({content:e.message,flags:MessageFlags.Ephemeral})}
+ }
+ if(interaction.commandName==='lumira-profile'){
+  if(!interaction.inGuild()||interaction.guildId!=='1472157525490139174')return interaction.reply({content:'Only available in LumiVibe.',flags:MessageFlags.Ephemeral});
+  const sub=interaction.options.getSubcommand(),g=interaction.guildId,u=interaction.user.id;
+  try{
+   const saved=profile(g,u);
+   if(sub==='view')return interaction.reply({content:saved?'Your profile: '+saved.about:'You have no profile yet. Use /lumira-profile create.',flags:MessageFlags.Ephemeral,allowedMentions:{parse:[]}});
+   const channel=await profileChannel(interaction.guild);
+   if(!channel)throw Error('The #cards channel was not found');
+   if(sub==='delete'){
+    if(saved?.messageId){try{await (await channel.messages.fetch(saved.messageId)).delete()}catch(e){console.warn('Profile card deletion:',e.message)}}
+    await removeProfile(g,u);
+    return interaction.reply({content:'Your profile was removed from #cards. 💙',flags:MessageFlags.Ephemeral});
+   }
+   const about=interaction.options.getString('about').trim().replace(/@everyone|@here/g,'[mention removed]');
+   const embed=profileEmbed(interaction.user,about);
+   let message;
+   if(saved?.messageId){try{message=await channel.messages.fetch(saved.messageId);await message.edit({embeds:[embed],allowedMentions:{parse:[]}})}catch(e){console.warn('Profile update, publishing replacement:',e.message);message=null}}
+   if(!message)message=await channel.send({embeds:[embed],allowedMentions:{parse:[]}});
+   await setProfile(g,u,{about,messageId:message.id,updatedAt:Date.now()});
+   return interaction.reply({content:'Your profile card is live in <#'+channel.id+'>! 💙',flags:MessageFlags.Ephemeral,allowedMentions:{parse:[]}});
+  }catch(e){console.error('Profile command:',e.message);return interaction.reply({content:'Could not update profile: '+e.message,flags:MessageFlags.Ephemeral})}
  }
  if(['lumira-lore','lumira-scrapbook'].includes(interaction.commandName)){
   if(!interaction.inGuild())return interaction.reply({content:'Only available in LumiVibe.',flags:MessageFlags.Ephemeral});
