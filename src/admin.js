@@ -338,7 +338,7 @@ export async function refreshLiveboard(guild){
    {name:'🧸 Stickers',value:String(stickers.size),inline:true},
    {name:'✦ QUICK NAVIGATION',value:'<#'+channel.id+'>  ·  '+(guild.channels.cache.find(x=>norm(x.name)==='bot-logs')?.toString()||'Bot Logs')},
    {name:'🦋 LUMIRA FEATURES',value:'AI chat  •  Games & trivia  •  Scrapbook\nPersonal memories (opt-in)  •  Event reminders'},
-   {name:'📌 STATUS',value:'This snapshot refreshes when Lumira starts. Continuous live updates are not enabled yet.'}
+   {name:'📌 STATUS',value:'Auto-refreshes approximately every 10 minutes while Lumira is online. Activity logs are in #bot-logs.'}
   )
   .setFooter({text:'Lumira • LumiVibe  |  Private staff view'})
   .setTimestamp(new Date());
