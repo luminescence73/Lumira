@@ -5,6 +5,7 @@ import {profileChannel,profile,setProfile} from './profiles.js';
 const cards=[
  {name:'Lumi',aliases:['lumi','luminescence73'],title:'The Creative Spark',about:'LumiVibe’s founder. Loves anime, drawing, and Sword x Staff. Chatty, playful, and frequently popping in and out of conversations.',tags:'🎨 Art • Anime • SxS'},
  {name:'Gracie',aliases:['gracie','bgracie'],title:'The Social Stargazer',about:'Outgoing and welcoming, with a love for astrology and Sword x Staff. A familiar face in the group and a go-to friend for game discussions.',tags:'✨ Astrology • SxS • Community'},
+ {name:'Megu',discordId:'237586130038423552',aliases:['megu','megumin'],title:'The Competitive Connoisseur',about:'Gracie’s sibling. A generous, competitive gamer who enjoys anime, food, and sharing everyday photos.',tags:'🎮 Gaming • Anime • Food'},
  {name:'Shug',aliases:['shug'],title:'The Laid-Back Wildcard',about:'Easygoing, funny, and always ready with an unexpected comment. Loves music, especially older tracks and metal.',tags:'🎸 Music • Humor'},
  {name:'Mitsuto',discordId:'1495189750162657400',aliases:['mitsuto','mits'],title:'The Dry-Humor Specialist',about:'Known for sarcasm, offbeat commentary, and a kind side that shows once you get to know him. Enjoys older music and metal.',tags:'🎵 Music • Sarcasm'},
  {name:'Tee',aliases:['tee'],title:'The Loyal Teaser',about:'Loyal, friendly, and fond of teasing the group. Enjoys music and testing Sword x Staff builds.',tags:'🛡️ SxS Builds • Music'},
