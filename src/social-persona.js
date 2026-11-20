@@ -1,4 +1,5 @@
 // Social tone changes by member; use IDs where supplied and display names only as fallback.
+const GIRLS = new Set(['858115465074966528']);
 const BOYS = new Set(['237586130038423552', '1495189750162657400', '1272841728952369172']);
 const normalize = (value) =>
   String(value || '')
@@ -6,7 +7,7 @@ const normalize = (value) =>
     .toLowerCase()
     .replace(/[^a-z0-9]/g, '');
 export function socialStyle({ userId, ownerId, displayName, username } = {}) {
-  if (userId && userId === ownerId) return 'girls';
+  if (userId && (userId === ownerId || GIRLS.has(userId))) return 'girls';
   if (BOYS.has(userId)) return 'diva';
   const names = [displayName, username].map(normalize);
   if (
@@ -59,7 +60,7 @@ export function friendRoastTarget(prompt, mentions, members) {
 const girls = [
   { name: 'Lumi', aliases: ['lumi', 'luminescence73'] },
   { name: 'Gracie', aliases: ['gracie', 'bgracie'] },
-  { name: 'Moonie', aliases: ['moonie', 'moony', 'meatshieldmoonie'] },
+  { name: 'Moonie', id: '858115465074966528', aliases: ['moonie', 'moony', 'meatshieldmoonie'] },
 ];
 
 export function gentleTeaseTarget(prompt, mentions, members, requester, ownerId) {
