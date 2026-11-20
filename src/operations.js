@@ -132,10 +132,9 @@ export function installOperations(client, scheduleInterval) {
   const memberActivity = (member, joined) => {
     if (member.guild?.id !== TARGET) return;
     record(member.guild, joined ? 'Member joined' : 'Member left', member.user?.username || member.id);
-    if (!member.user?.bot)
-      void announceMember(member, joined).catch((error) =>
-        console.warn('Lumira member announcement:', error.message),
-      );
+    void announceMember(member, joined)
+      .then(() => console.log('Lumira posted in #' + (joined ? 'welcome' : 'goodbye')))
+      .catch((error) => console.warn('Lumira member announcement:', error.message));
   };
   client.on(Events.GuildMemberAdd, (member) => memberActivity(member, true));
   client.on(Events.GuildMemberRemove, (member) => memberActivity(member, false));

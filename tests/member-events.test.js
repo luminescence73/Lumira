@@ -42,10 +42,15 @@ test('LumiVibe member joins and leaves post to the matching channels and private
   const member = { guild, user: { username: 'example' } };
   client.emit(Events.GuildMemberAdd, member);
   client.emit(Events.GuildMemberRemove, member);
+  const bot = { guild, user: { username: 'Carl-bot', bot: true } };
+  client.emit(Events.GuildMemberAdd, bot);
+  client.emit(Events.GuildMemberRemove, bot);
   client.emit(Events.GuildMemberAdd, { ...member, guild: { id: 'another-server' } });
   await new Promise((resolve) => setImmediate(resolve));
-  assert.equal(posts.filter(([name]) => name === 'welcome').length, 1);
-  assert.equal(posts.filter(([name]) => name === 'goodbye').length, 1);
+  assert.equal(posts.filter(([name]) => name === 'welcome').length, 2);
+  assert.equal(posts.filter(([name]) => name === 'goodbye').length, 2);
+  assert.ok(posts.some(([name, payload]) => name === 'goodbye' && payload.content.includes('Carl-bot')));
+  assert.ok(posts.some(([name, payload]) => name === 'welcome' && payload.content.includes('Carl-bot')));
   const log = posts
     .filter(([name]) => name === 'bot-logs')
     .map(([, payload]) => payload.embeds[0].data.description)
