@@ -69,10 +69,14 @@ client.on(Events.InteractionCreate,async interaction=>{
 
 // A direct @mention takes priority over passive commentary, and works without a slash command.
 client.on(Events.MessageCreate,async message=>{
- if(!message.inGuild()||message.author.bot||message.webhookId||!client.user||!message.mentions.users.has(client.user.id)||!permitted(message.channelId))return;
- const prompt=message.content.replace(new RegExp('<@!?'+client.user.id+'>','g'),'').trim();
- if(!prompt){await message.reply({content:'You called? 💙',allowedMentions:{parse:[]}});return}
- if(!canRespond(message.author.id)){await message.reply({content:'Give me a sec, my brain is buffering. 💙',allowedMentions:{parse:[]}});return}
+ if(!message.inGuild()||message.author.bot||message.webhookId||!client.user)return;
+ const mentioned=message.mentions.users.has(client.user.id)||new RegExp('<@!?'+client.user.id+'>').test(message.content||'');
+ if(!mentioned)return;
+ console.log('Lumira mention received; channel:',message.channelId,'content length:',message.content?.length||0,'permitted:',permitted(message.channelId));
+ if(!permitted(message.channelId)){await message.reply({content:'I cannot chat in this channel yet. 💙',allowedMentions:{parse:[]}}).catch(error=>console.error('Mention permission notice failed:',error.message));return}
+ const prompt=(message.content||'').replace(new RegExp('<@!?'+client.user.id+'>','g'),'').trim();
+ if(!prompt){await message.reply({content:'You called? 💙',allowedMentions:{parse:[]}}).catch(error=>console.error('Empty mention reply failed:',error.message));return}
+ if(!canRespond(message.author.id)){await message.reply({content:'Give me a sec, my brain is buffering. 💙',allowedMentions:{parse:[]}}).catch(error=>console.error('Cooldown mention reply failed:',error.message));return}
  const key=conversationKey(message.guildId,message.channelId,message.author.id);
  try{
   const prior=getConversation(key);
