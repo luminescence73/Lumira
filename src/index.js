@@ -2,7 +2,7 @@ import 'dotenv/config';
 import {loadFeatures,settings,setSetting,getEgo,setEgo,clearEgo} from './features.js';
 import {loadLore,jokes,moments,addJoke,deleteJoke,addMoment,deleteMoment} from './lore.js';
 import { loadMemories, memoryStatus, enableMemory, saveMemory, removeMemory, disableMemory } from './memory.js';
-import { Client, GatewayIntentBits, Events, MessageFlags, PermissionFlagsBits, SlashCommandBuilder, Partials } from 'discord.js';
+import { Client, GatewayIntentBits, Events, MessageFlags, PermissionFlagsBits, SlashCommandBuilder, Partials, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 const token=process.env.DISCORD_TOKEN;
 if(!token) throw new Error('DISCORD_TOKEN is required');
 const allowed=new Set((process.env.LUMIRA_CHANNEL_IDS||'').split(',').map(s=>s.trim()).filter(Boolean));
@@ -16,6 +16,20 @@ await loadFeatures();
 const client=new Client({intents,partials:[Partials.Message,Partials.Channel,Partials.Reaction]});
 client.on('raw',packet=>{if(packet.t==='MESSAGE_CREATE')console.log('Gateway MESSAGE_CREATE received; guild:',Boolean(packet.d?.guild_id),'mentions bot:',Array.isArray(packet.d?.mentions)&&packet.d.mentions.some(u=>u.id===client.user?.id),'content present:',Boolean(packet.d?.content))});
 const recentMessages=new Map();
+const activity=new Map();
+function bump(g,key){const v=activity.get(g)||{messages:0,mentions:0,comments:0,lore:0,scrapbook:0,started:Date.now()};v[key]=(v[key]||0)+1;activity.set(g,v)}
+function liveboard(g){
+ const s=settings(g),v=activity.get(g)||{messages:0,mentions:0,comments:0,lore:0,scrapbook:0,started:Date.now()};
+ const names={autoLore:'Auto Lore',autoScrapbook:'Auto Scrapbook',spontaneous:'Spontaneous Chat',roasts:'Roast Mode'};
+ const embed=new EmbedBuilder().setColor(0x69b9f6).setTitle('🦋 Lumira Liveboard').setDescription('Private owner dashboard • switches apply immediately')
+ .addFields({name:'Feature switches',value:Object.entries(names).map(([k,n])=>(s[k]?'🟢':'⚫')+' **'+n+'**').join('\\n')},
+ {name:'Saved server lore',value:String(jokes(g).length)+' jokes • '+String(moments(g).length)+' scrapbook moments',inline:true},
+ {name:'Since last restart',value:v.messages+' public messages • '+v.mentions+' mentions • '+v.comments+' comments • '+v.lore+' auto jokes • '+v.scrapbook+' auto moments',inline:false})
+ .setFooter({text:'Private to server owner • live counters reset on restart'});
+ const buttons=Object.entries(names).map(([k,n])=>new ButtonBuilder().setCustomId('lumira:toggle:'+k).setLabel(n).setStyle(s[k]?ButtonStyle.Success:ButtonStyle.Secondary));
+ return {embeds:[embed],components:[new ActionRowBuilder().addComponents(buttons)],allowedMentions:{parse:[]}};
+}
+
 const lastSpoke=new Map();
 const lastEvaluated=new Map();
 const pendingChannels=new Set();
@@ -90,6 +104,7 @@ client.once(Events.ClientReady,async c=>{
  .addSubcommand(s=>s.setName('reset').setDescription('Delete your persona')).toJSON();
  const controlCommand=new SlashCommandBuilder().setName('lumira-control').setDescription('Server owner: manage Lumira feature switches')
  .addSubcommand(s=>s.setName('status').setDescription('View current feature settings'))
+ .addSubcommand(s=>s.setName('dashboard').setDescription('Open the private interactive Liveboard'))
  .addSubcommand(s=>s.setName('set').setDescription('Enable or disable a feature')
   .addStringOption(o=>o.setName('feature').setDescription('Feature to configure').setRequired(true).addChoices(
    {name:'Automatic lore',value:'autoLore'},{name:'Automatic scrapbook',value:'autoScrapbook'},{name:'Spontaneous comments',value:'spontaneous'},{name:'Roasts',value:'roasts'}))
@@ -107,12 +122,19 @@ client.once(Events.ClientReady,async c=>{
  }catch(error){console.error('Slash command registration failed:',error)}
 });
 client.on(Events.InteractionCreate,async interaction=>{
+ if(interaction.isButton()&&interaction.customId.startsWith('lumira:toggle:')){
+  if(!interaction.inGuild()||interaction.guild.ownerId!==interaction.user.id)return interaction.reply({content:'Only the server owner can change these settings.',flags:MessageFlags.Ephemeral});
+  const key=interaction.customId.split(':')[2];
+  try{if(!['autoLore','autoScrapbook','spontaneous','roasts'].includes(key))throw Error('Invalid control');await setSetting(interaction.guildId,key,!settings(interaction.guildId)[key]);return interaction.update(liveboard(interaction.guildId))}
+  catch(e){return interaction.reply({content:'Could not update: '+e.message,flags:MessageFlags.Ephemeral})}
+ }
  if(!interaction.isChatInputCommand()||!['lumira-forget','lumira-memory','lumira-lore','lumira-scrapbook','lumira-ego','lumira-control'].includes(interaction.commandName))return;
  if(interaction.commandName==='lumira-control'){
   if(!interaction.inGuild()||interaction.guild.ownerId!==interaction.user.id)return interaction.reply({content:'Only the server owner can use Lumira controls.',flags:MessageFlags.Ephemeral});
   try{
    const sub=interaction.options.getSubcommand();
    if(sub==='set')await setSetting(interaction.guildId,interaction.options.getString('feature'),interaction.options.getBoolean('enabled'));
+   if(sub==='dashboard')return interaction.reply({...liveboard(interaction.guildId),flags:MessageFlags.Ephemeral});
    const s=settings(interaction.guildId);
    return interaction.reply({content:'Lumira controls (server owner only):\\n'+Object.entries(s).map(([k,v])=>k+': '+(v?'ON':'OFF')).join('\\n')+'\\nThese switches take effect immediately.',flags:MessageFlags.Ephemeral});
   }catch(e){return interaction.reply({content:'Control error: '+e.message,flags:MessageFlags.Ephemeral})}
@@ -181,6 +203,7 @@ client.on(Events.MessageCreate,async message=>{
  if(!message.inGuild()||message.author.bot||message.webhookId||!client.user)return;
  const mentioned=message.mentions.users.has(client.user.id)||new RegExp('<@!?'+client.user.id+'>').test(message.content||'');
  if(!mentioned)return;
+ bump(message.guildId,'mentions');
  console.log('Direct mention matched:',message.channelId);
  console.log('Lumira mention received; channel:',message.channelId,'content length:',message.content?.length||0,'permitted:',permitted(message.channelId));
  if(!permitted(message.channelId)){await message.reply({content:'I cannot chat in this channel yet. 💙',allowedMentions:{parse:[]}}).catch(error=>console.error('Mention permission notice failed:',error.message));return}
@@ -228,6 +251,7 @@ client.on(Events.MessageCreate,async message=>{
   if((recentMessages.get(message.channelId)||[]).at(-1)?.time!==now)return;
   await message.channel.send({content:result,allowedMentions:{parse:[]}});
   lastSpoke.set(message.channelId,Date.now());
+  bump(message.guildId,'comments');
   console.log('Lumira made a spontaneous comment in an approved channel');
  }catch(error){console.error('Spontaneous comment skipped:',error.message)}
  finally{pendingChannels.delete(message.channelId)}
@@ -246,6 +270,7 @@ function safeSharedPhrase(text){
 }
 client.on(Events.MessageCreate,async message=>{
  if(!message.inGuild()||message.author.bot||message.webhookId||!publicSocialChannel(message.channel)||!settings(message.guildId).autoLore)return;
+ bump(message.guildId,'messages');
  const phrase=safeSharedPhrase(message.content||'');
  if(!phrase)return;
  const key=message.guildId+':'+phrase.toLowerCase();
@@ -256,7 +281,7 @@ client.on(Events.MessageCreate,async message=>{
  s.authors.add(message.author.id);s.last=now;phraseSignals.set(key,s);
  if(s.authors.size<3||jokes(message.guildId).some(x=>x.text.toLowerCase()===phrase.toLowerCase()))return;
  phraseSignals.delete(key);
- try{await addJoke(message.guildId,phrase,'auto');console.log('Learned repeated public inside-joke candidate')}catch(e){console.error('Auto lore skipped:',e.message)}
+ try{await addJoke(message.guildId,phrase,'auto');bump(message.guildId,'lore');console.log('Learned repeated public inside-joke candidate')}catch(e){console.error('Auto lore skipped:',e.message)}
 });
 client.on(Events.MessageReactionAdd,async (reaction,user)=>{
  if(user.bot)return;
@@ -275,6 +300,7 @@ client.on(Events.MessageReactionAdd,async (reaction,user)=>{
   automaticMomentCooldown.add(message.id);
   if(automaticMomentCooldown.size>2000)automaticMomentCooldown.clear();
   await addMoment(message.guildId,{messageId:message.id,url:message.url,by:'auto',author:message.author.id,at:Date.now()});
+  bump(message.guildId,'scrapbook');
   console.log('Auto-saved highly reacted public scrapbook moment');
  }catch(e){console.error('Auto scrapbook skipped:',e.message)}
 });
