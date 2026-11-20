@@ -1,6 +1,6 @@
 // Social tone changes by member; use IDs where supplied and display names only as fallback.
 const GIRLS = new Set(['858115465074966528']);
-const BOYS = new Set(['237586130038423552', '1495189750162657400', '1272841728952369172']);
+const BOYS = new Set(['1451794009872797850', '237586130038423552', '1495189750162657400', '1272841728952369172']);
 const normalize = (value) =>
   String(value || '')
     .normalize('NFKD')
@@ -43,7 +43,7 @@ export function playfulActivity(text) {
 
 const roastFriends = [
   { name: 'Tee', aliases: ['tee'] },
-  { name: 'Shug', aliases: ['shug'] },
+  { name: 'Shug', id: '1451794009872797850', aliases: ['shug'] },
   { name: 'Mitsuto', id: '1495189750162657400', aliases: ['mitsuto', 'mits'] },
   { name: 'Megu', id: '237586130038423552', aliases: ['megu', 'megumin'] },
   { name: 'Dante', id: '1272841728952369172', aliases: ['dante'] },
