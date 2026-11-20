@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import {loadRoster,syncRoster,roster,findMembers} from './roster.js';
 import {loadEvents,schedule,upcoming,dueEvents} from './events.js';
 import {loadPlayground,gameCard,vote,leaderboard,award,recentAwards} from './playground.js';
 import {renderCard,studioBoard,generateImage} from './visual.js';
@@ -18,6 +19,7 @@ await loadLore();
 await loadFeatures();
 await loadPlayground();
 await loadEvents();
+await loadRoster();
 const client=new Client({intents,partials:[Partials.Message,Partials.Channel,Partials.Reaction]});
 client.on('raw',packet=>{if(packet.t==='MESSAGE_CREATE')console.log('Gateway MESSAGE_CREATE received; guild:',Boolean(packet.d?.guild_id),'mentions bot:',Array.isArray(packet.d?.mentions)&&packet.d.mentions.some(u=>u.id===client.user?.id),'content present:',Boolean(packet.d?.content))});
 const recentMessages=new Map();
@@ -120,7 +122,7 @@ function canRespond(userId){const now=Date.now();if(now-(cooldown.get(userId)||0
 client.once(Events.ClientReady,async c=>{
  console.log('Lumira online as '+c.user.tag);
  console.log('Gateway intents:',intents.join(','),'guild count:',c.guilds.cache.size);
- for(const guild of c.guilds.cache.values()){console.log('Guild:',guild.id,'name:',guild.name,'bot member cached:',Boolean(guild.members.me));}
+ for(const guild of c.guilds.cache.values()){console.log('Guild:',guild.id,'name:',guild.name,'bot member cached:',Boolean(guild.members.me));syncRoster(guild).catch(e=>console.error('Member directory sync:',e.message));}
  if(process.env.GEMINI_API_KEY){try{const answer=await replyTo('Reply with one short friendly greeting.');console.log('Gemini startup self-test succeeded; response length:',answer.length)}catch(error){console.error('Gemini startup self-test failed:',error.message)}}
  const memoryCommand=new SlashCommandBuilder().setName('lumira-memory').setDescription('Manage your own opt-in long-term memories')
  .addSubcommand(s=>s.setName('enable').setDescription('Opt in to saving personal memories'))
@@ -179,14 +181,18 @@ client.once(Events.ClientReady,async c=>{
  const eventCommand=new SlashCommandBuilder().setName('lumira-event').setDescription('Opt-in LumiVibe event reminders')
  .addSubcommand(s=>s.setName('schedule').setDescription('Owner: schedule one event reminder').addStringOption(o=>o.setName('title').setDescription('Event name').setRequired(true).setMaxLength(80)).addStringOption(o=>o.setName('utc').setDescription('UTC time, e.g. 2026-12-01T20:00:00Z').setRequired(true)))
  .addSubcommand(s=>s.setName('upcoming').setDescription('View upcoming events')).toJSON();
+ const rosterCommand=new SlashCommandBuilder().setName('lumira-members').setDescription('Owner: private saved Discord member ID directory')
+ .addSubcommand(s=>s.setName('sync').setDescription('Refresh member IDs and names'))
+ .addSubcommand(s=>s.setName('status').setDescription('Show directory completeness and count'))
+ .addSubcommand(s=>s.setName('find').setDescription('Find a member by username or nickname').addStringOption(o=>o.setName('name').setDescription('Member name').setRequired(true))).toJSON();
  const forgetCommand=new SlashCommandBuilder().setName('lumira-forget').setDescription('Clear your recent Lumira conversation in this channel').toJSON();
  try {
    if(process.env.DISCORD_GUILD_ID){
      const guild=await c.guilds.fetch(process.env.DISCORD_GUILD_ID);
-     await guild.commands.set([forgetCommand,memoryCommand,loreCommand,scrapbookCommand,egoCommand,controlCommand,vibeCommand,privacyCommand,channelCommand,studioCommand,playCommand,personalityCommand,eventCommand]);
+     await guild.commands.set([forgetCommand,memoryCommand,loreCommand,scrapbookCommand,egoCommand,controlCommand,vibeCommand,privacyCommand,channelCommand,studioCommand,playCommand,personalityCommand,eventCommand,rosterCommand]);
      console.log('Registered /lumira-forget in configured guild');
    } else {
-     await c.application.commands.set([forgetCommand,memoryCommand,loreCommand,scrapbookCommand,egoCommand,controlCommand,vibeCommand,privacyCommand,channelCommand,studioCommand,playCommand,personalityCommand,eventCommand]);
+     await c.application.commands.set([forgetCommand,memoryCommand,loreCommand,scrapbookCommand,egoCommand,controlCommand,vibeCommand,privacyCommand,channelCommand,studioCommand,playCommand,personalityCommand,eventCommand,rosterCommand]);
      console.log('Registered /lumira-forget globally (may take time to appear)');
    }
  }catch(error){console.error('Slash command registration failed:',error)}
@@ -214,7 +220,21 @@ client.on(Events.InteractionCreate,async interaction=>{
   try{if(!['autoLore','autoScrapbook','spontaneous','roasts'].includes(key))throw Error('Invalid control');await setSetting(interaction.guildId,key,!settings(interaction.guildId)[key]);return interaction.update(liveboard(interaction.guildId))}
   catch(e){return interaction.reply({content:'Could not update: '+e.message,flags:MessageFlags.Ephemeral})}
  }
- if(!interaction.isChatInputCommand()||!['lumira-forget','lumira-memory','lumira-lore','lumira-scrapbook','lumira-ego','lumira-control','lumira-vibe','lumira-privacy','lumira-channels','lumira-studio','lumira-play','lumira-personality','lumira-event'].includes(interaction.commandName))return;
+ if(!interaction.isChatInputCommand()||!['lumira-forget','lumira-memory','lumira-lore','lumira-scrapbook','lumira-ego','lumira-control','lumira-vibe','lumira-privacy','lumira-channels','lumira-studio','lumira-play','lumira-personality','lumira-event','lumira-members'].includes(interaction.commandName))return;
+ if(interaction.commandName==='lumira-members'){
+  if(!interaction.inGuild()||interaction.guild.ownerId!==interaction.user.id)return interaction.reply({content:'Server owner only.',flags:MessageFlags.Ephemeral});
+  const sub=interaction.options.getSubcommand(),g=interaction.guildId;
+  if(sub==='sync'){
+   await interaction.deferReply({flags:MessageFlags.Ephemeral});
+   const result=await syncRoster(interaction.guild);
+   return interaction.editReply({content:'🔐 Saved '+result.count+' member IDs in Railway private storage. '+(result.complete?'Full server roster confirmed.':'Partial roster only. Enable the Server Members Intent for a complete fetch.')});
+  }
+  if(sub==='find'){
+   const matches=findMembers(g,interaction.options.getString('name'));
+   return interaction.reply({content:matches.length?matches.map(m=>m.displayName+' (@'+m.username+'): '+m.id).join('\\n'):'No matches in saved directory.',flags:MessageFlags.Ephemeral,allowedMentions:{parse:[]}});
+  }
+  const info=roster(g);return interaction.reply({content:'🔐 Stored members: '+Object.keys(info.members).length+'\\nFull sync: '+(info.complete?'yes':'not yet')+'\\nLast sync: '+(info.lastSynced?new Date(info.lastSynced).toISOString():'never'),flags:MessageFlags.Ephemeral});
+ }
  if(interaction.commandName==='lumira-personality'){
   if(!interaction.inGuild()||interaction.guild.ownerId!==interaction.user.id)return interaction.reply({content:'Owner only.',flags:MessageFlags.Ephemeral});
   if(interaction.options.getSubcommand()==='set')await setPersonality(interaction.guildId,interaction.options.getString('style'));
