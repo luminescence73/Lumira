@@ -1,6 +1,6 @@
 import {promises as fs} from 'node:fs';
 import path from 'node:path';
-import {PermissionFlagsBits,ChannelType} from 'discord.js';
+import {PermissionFlagsBits,ChannelType,EmbedBuilder} from 'discord.js';
 import sharp from 'sharp';
 const file=path.join(process.env.LUMIRA_DATA_DIR||'/data','admin.json');let db={},queue=Promise.resolve();
 export async function loadAdmin(){try{db=JSON.parse(await fs.readFile(file,'utf8'))}catch(e){if(e.code!=='ENOENT')throw e;db={}}console.log('Lumira admin configuration ready')}
@@ -316,4 +316,37 @@ export async function organizeEmojiNamesOnce(guild){
  s.emojiSubjectNamingVersion=1;await save();
  console.log('LumiVibe emoji subject naming:',JSON.stringify(report));
  return {renamed:report.renamed.length,unclassified:report.skipped.length};
+}
+
+export async function refreshLiveboard(guild){
+ const s=state(guild.id);
+ const control=guild.channels.cache.find(x=>x.type===ChannelType.GuildCategory&&norm(x.name)===norm('✦ LUMIRA CONTROL'));
+ const channel=guild.channels.cache.find(x=>x.type===ChannelType.GuildText&&x.parentId===control?.id&&norm(x.name)==='liveboard');
+ if(!channel)throw Error('Liveboard channel missing');
+ const bot=await guild.members.fetchMe();
+ if(!bot.permissionsIn(channel).has(PermissionFlagsBits.SendMessages,PermissionFlagsBits.EmbedLinks))throw Error('Lumira needs Send Messages and Embed Links in liveboard');
+ const emojis=await guild.emojis.fetch();
+ const stickers=await guild.stickers.fetch();
+ const embed=new EmbedBuilder()
+  .setColor(0x82b6fa)
+  .setAuthor({name:'LUMIVIBE  •  PRIVATE CONTROL CENTER',iconURL:guild.iconURL()||undefined})
+  .setTitle('✦  The LumiVibe Liveboard')
+  .setDescription('A little corner of the cosmos for everything happening around LumiVibe. ✨\n\n**SERVER SNAPSHOT**')
+  .addFields(
+   {name:'👥 Members',value:String(guild.memberCount),inline:true},
+   {name:'🎨 Emojis',value:String(emojis.size),inline:true},
+   {name:'🧸 Stickers',value:String(stickers.size),inline:true},
+   {name:'✦ QUICK NAVIGATION',value:'<#'+channel.id+'>  ·  '+(guild.channels.cache.find(x=>norm(x.name)==='bot-logs')?.toString()||'Bot Logs')},
+   {name:'🦋 LUMIRA FEATURES',value:'AI chat  •  Games & trivia  •  Scrapbook\nPersonal memories (opt-in)  •  Event reminders'},
+   {name:'📌 STATUS',value:'This snapshot refreshes when Lumira starts. Continuous live updates are not enabled yet.'}
+  )
+  .setFooter({text:'Lumira • LumiVibe  |  Private staff view'})
+  .setTimestamp(new Date());
+ let msg=null;
+ if(s.liveboardMessageId){try{msg=await channel.messages.fetch(s.liveboardMessageId)}catch{}}
+ if(!msg){const recent=await channel.messages.fetch({limit:50});msg=recent.find(m=>m.author.id===guild.client.user.id&&m.embeds.some(e=>e.title==='✦  The LumiVibe Liveboard'))||null}
+ if(msg)await msg.edit({content:'',embeds:[embed]});
+ else {msg=await channel.send({embeds:[embed]});}
+ s.liveboardMessageId=msg.id;await save();
+ return {messageId:msg.id,updated:!!msg};
 }
