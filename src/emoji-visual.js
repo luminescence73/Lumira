@@ -1,5 +1,11 @@
 import { PermissionFlagsBits } from 'discord.js';
-import { classifyEmoji, cleanName, EMOJI_CATEGORIES, visionUnavailable } from './emoji-classifier.js';
+import {
+  classifyEmoji,
+  classifyEmojiBatch,
+  cleanName,
+  EMOJI_CATEGORIES,
+  visionUnavailable,
+} from './emoji-classifier.js';
 import { jsonStore } from './json-store.js';
 
 export { EMOJI_CATEGORIES };
@@ -54,11 +60,12 @@ function describeClassification(name, status, extra = {}) {
 export function createEmojiOrganizer({
   storage = store,
   classify = classifyEmoji,
+  classifyBatch = classify === classifyEmoji ? classifyEmojiBatch : null,
   wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
   hasKey = () => Boolean(process.env.GEMINI_API_KEY),
 } = {}) {
   // A shared state file must have a single reader/writer for the duration of a batch.
-  return async function organizeVisualEmojis(guild, { maxScans = 24, maxRenames = 24, concurrency = 3 } = {}) {
+  return async function organizeVisualEmojis(guild, { maxScans = 24, maxRenames = 24, concurrency = 2 } = {}) {
     if (running.size) return { running: true };
     if (!hasKey()) return { unavailable: 'Gemini vision is unconfigured' };
     running.add(guild.id);
@@ -84,9 +91,19 @@ export function createEmojiOrganizer({
       const scans = work.filter(({ action }) => action === 'scan').slice(0, maxScans);
       const results = new Map();
       let nextScan = 0;
+      const groupSize = classifyBatch ? 6 : 1;
+      let discordPaused = false;
       async function prepareScans() {
         while (nextScan < scans.length) {
-          const { emoji, record } = scans[nextScan++];
+          const group = scans.slice(nextScan, nextScan + groupSize);
+          nextScan += groupSize;
+          if (classifyBatch) {
+            const classified = await classifyBatch(group);
+            for (const [id, result] of classified) results.set(id, result);
+            if ([...classified.values()].some(({ error }) => visionUnavailable(error))) return;
+            continue;
+          }
+          const [{ emoji, record }] = group;
           try {
             results.set(emoji.id, { value: await classify(emoji, { describeOnly: record?.status === 'review' }) });
           } catch (error) {
@@ -101,7 +118,7 @@ export function createEmojiOrganizer({
           report.skipped++;
           continue;
         }
-        if ((action === 'scan' && !results.has(emoji.id)) || report.renamed >= maxRenames || report.paused) {
+        if ((action === 'scan' && !results.has(emoji.id)) || report.renamed >= maxRenames || discordPaused) {
           report.remaining++;
           continue;
         }
@@ -153,7 +170,13 @@ export function createEmojiOrganizer({
           records[emoji.id] = { ...planned, status: 'verified' };
           await storage.save(data);
         } catch (error) {
-          if (visionUnavailable(error) || error.status === 429 || [50001, 50013].includes(error.code)) {
+          if (visionUnavailable(error)) {
+            report.paused = true;
+            report.remaining++;
+            continue;
+          }
+          if (error.status === 429 || [50001, 50013].includes(error.code)) {
+            discordPaused = true;
             report.paused = true;
             report.remaining++;
             console.warn('Visual emoji batch paused:', error.message);
