@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import {loadAdmin,config,authorize,privateAccess,stage,discard,proposals,preview,applyGuild,layoutPreview,makeChannel,imageForEmoji,imageForSticker,layoutPlan,applyLayout,applyLayoutOnce,finishLayoutOnce} from './admin.js';
+import {loadAdmin,config,authorize,privateAccess,stage,discard,proposals,preview,applyGuild,layoutPreview,makeChannel,imageForEmoji,imageForSticker,layoutPlan,applyLayout,applyLayoutOnce,finishLayoutOnce,populateEmptySectionsOnce} from './admin.js';
 import {loadRoster,syncRoster,roster,findMembers} from './roster.js';
 import {loadEvents,schedule,upcoming,dueEvents} from './events.js';
 import {loadPlayground,gameCard,vote,leaderboard,award,recentAwards} from './playground.js';
@@ -124,7 +124,7 @@ function canRespond(userId){const now=Date.now();if(now-(cooldown.get(userId)||0
 client.once(Events.ClientReady,async c=>{
  console.log('Lumira online as '+c.user.tag);
  console.log('Gateway intents:',intents.join(','),'guild count:',c.guilds.cache.size);
- for(const guild of c.guilds.cache.values()){console.log('Guild:',guild.id,'name:',guild.name,'bot member cached:',Boolean(guild.members.me));syncRoster(guild).catch(e=>console.error('Member directory sync:',e.message));if(guild.id==='1472157525490139174'){try{const result=await applyLayoutOnce(guild);console.log('LumiVibe automatic channel redesign:',JSON.stringify(result));const cleanup=await finishLayoutOnce(guild);console.log('LumiVibe legacy channel cleanup:',JSON.stringify(cleanup))}catch(e){console.error('LumiVibe automatic channel redesign failed:',e.stack||e.message)}}}
+ for(const guild of c.guilds.cache.values()){console.log('Guild:',guild.id,'name:',guild.name,'bot member cached:',Boolean(guild.members.me));syncRoster(guild).catch(e=>console.error('Member directory sync:',e.message));if(guild.id==='1472157525490139174'){try{const result=await applyLayoutOnce(guild);console.log('LumiVibe automatic channel redesign:',JSON.stringify(result));const cleanup=await finishLayoutOnce(guild);console.log('LumiVibe legacy channel cleanup:',JSON.stringify(cleanup));const sections=await populateEmptySectionsOnce(guild);console.log('LumiVibe voice and control setup:',JSON.stringify(sections))}catch(e){console.error('LumiVibe automatic channel redesign failed:',e.stack||e.message)}}}
  if(process.env.GEMINI_API_KEY){try{const answer=await replyTo('Reply with one short friendly greeting.');console.log('Gemini startup self-test succeeded; response length:',answer.length)}catch(error){console.error('Gemini startup self-test failed:',error.message)}}
  const memoryCommand=new SlashCommandBuilder().setName('lumira-memory').setDescription('Manage your own opt-in long-term memories')
  .addSubcommand(s=>s.setName('enable').setDescription('Opt in to saving personal memories'))
