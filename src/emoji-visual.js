@@ -71,8 +71,9 @@ export async function organizeVisualEmojis(guild,{maxScans=8}={}){
     }
     const target=uniqueEmojiName(result.category,result.subject,used,emoji.name);
     if(target!==emoji.name){
+     const oldName=emoji.name.toLowerCase();
      await emoji.edit({name:target,reason:'Owner-approved image-based emoji classification'});
-     used.delete(emoji.name.toLowerCase());used.add(target);report.renamed++;
+     used.delete(oldName);used.add(target);report.renamed++;
     }else report.verified++;
     guildDb[emoji.id]={status:'verified',name:target,previous:emoji.name,classification:result,at:Date.now()};
     await save();
