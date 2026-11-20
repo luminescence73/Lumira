@@ -39,7 +39,7 @@ test('emoji reactions use low-risk social triggers',()=>{assert.equal(emojiForSo
 import {classificationAction,uniqueEmojiName} from '../src/emoji-visual.js';
 test('emoji classifier revisits legacy prefixes and stale review entries',()=>{
  assert.equal(classificationAction({name:'pika_unknown'},undefined),'scan');
- assert.equal(classificationAction({name:'pika_old'},{status:'renamed',name:'pika_old'}),'skip');
+ assert.equal(classificationAction({name:'pika_old'},{status:'renamed',name:'pika_old'}),'scan');
  assert.equal(classificationAction({name:'anime_old'},{status:'review',at:1},Date.now()),'scan');
  assert.equal(classificationAction({name:'animal_cat'},{status:'verified',name:'animal_cat'}),'skip');
 });
