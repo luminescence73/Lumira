@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import { Client, GatewayIntentBits, Events, MessageFlags, SlashCommandBuilder } from 'discord.js';
+import { Client, GatewayIntentBits, Events, MessageFlags, PermissionFlagsBits, SlashCommandBuilder } from 'discord.js';
 const token=process.env.DISCORD_TOKEN;
 if(!token) throw new Error('DISCORD_TOKEN is required');
 const allowed=new Set((process.env.LUMIRA_CHANNEL_IDS||'').split(',').map(s=>s.trim()).filter(Boolean));
@@ -63,7 +63,7 @@ client.on(Events.InteractionCreate,async interaction=>{
 
 // Passive conversation participation is opt-in and limited to explicitly approved channels.
 client.on(Events.MessageCreate,async message=>{
- if(!spontaneousEnabled||!message.inGuild()||message.author.bot||message.webhookId||!spontaneousChannels.has(message.channelId))return;
+ if(!spontaneousEnabled||!message.inGuild()||message.author.bot||message.webhookId||!(spontaneousChannels.has(message.channelId)||(spontaneousChannels.size===0&&message.channel.permissionsFor?.(message.guild.roles.everyone)?.has(PermissionFlagsBits.ViewChannel))))return;
  if(!message.content?.trim()||message.content.length>1200)return;
  const now=Date.now();
  const history=(recentMessages.get(message.channelId)||[]).filter(item=>now-item.time<10*60*1000);
