@@ -17,6 +17,10 @@ const client=new Client({intents,partials:[Partials.Message,Partials.Channel,Par
 client.on('raw',packet=>{if(packet.t==='MESSAGE_CREATE')console.log('Gateway MESSAGE_CREATE received; guild:',Boolean(packet.d?.guild_id),'mentions bot:',Array.isArray(packet.d?.mentions)&&packet.d.mentions.some(u=>u.id===client.user?.id),'content present:',Boolean(packet.d?.content))});
 const recentMessages=new Map();
 const activity=new Map();
+const channelPulse=new Map();
+function pulse(message){if(!message.inGuild()||message.author.bot||message.webhookId||!publicSocialChannel(message.channel))return;const key=message.guildId;const arr=(channelPulse.get(key)||[]).filter(x=>Date.now()-x.time<24*3600000);arr.push({time:Date.now(),channel:message.channelId});channelPulse.set(key,arr.slice(-1500));bump(key,'messages')}
+function vibe(g){const items=(channelPulse.get(g)||[]).filter(x=>Date.now()-x.time<24*3600000);const channels=new Set(items.map(x=>x.channel)).size;const volume=items.length;return {volume,channels,label:volume<5?'Quiet hours 🌙':volume<30?'Cozy chatter ☕':volume<100?'The group chat is awake 🦋':'Full chaos mode ⚡'}};
+client.on(Events.MessageCreate,pulse);
 function bump(g,key){const v=activity.get(g)||{messages:0,mentions:0,comments:0,lore:0,scrapbook:0,started:Date.now()};v[key]=(v[key]||0)+1;activity.set(g,v)}
 function liveboard(g){
  const s=settings(g),v=activity.get(g)||{messages:0,mentions:0,comments:0,lore:0,scrapbook:0,started:Date.now()};
@@ -109,14 +113,17 @@ client.once(Events.ClientReady,async c=>{
   .addStringOption(o=>o.setName('feature').setDescription('Feature to configure').setRequired(true).addChoices(
    {name:'Automatic lore',value:'autoLore'},{name:'Automatic scrapbook',value:'autoScrapbook'},{name:'Spontaneous comments',value:'spontaneous'},{name:'Roasts',value:'roasts'}))
   .addBooleanOption(o=>o.setName('enabled').setDescription('On or off').setRequired(true))).toJSON();
+ const vibeCommand=new SlashCommandBuilder().setName('lumira-vibe').setDescription('See LumiVibe activity and memorable moments')
+ .addSubcommand(s=>s.setName('now').setDescription('See recent public chat activity'))
+ .addSubcommand(s=>s.setName('recap').setDescription('Get a short recap from saved public scrapbook links')).toJSON();
  const forgetCommand=new SlashCommandBuilder().setName('lumira-forget').setDescription('Clear your recent Lumira conversation in this channel').toJSON();
  try {
    if(process.env.DISCORD_GUILD_ID){
      const guild=await c.guilds.fetch(process.env.DISCORD_GUILD_ID);
-     await guild.commands.set([forgetCommand,memoryCommand,loreCommand,scrapbookCommand,egoCommand,controlCommand]);
+     await guild.commands.set([forgetCommand,memoryCommand,loreCommand,scrapbookCommand,egoCommand,controlCommand,vibeCommand]);
      console.log('Registered /lumira-forget in configured guild');
    } else {
-     await c.application.commands.set([forgetCommand,memoryCommand,loreCommand,scrapbookCommand,egoCommand,controlCommand]);
+     await c.application.commands.set([forgetCommand,memoryCommand,loreCommand,scrapbookCommand,egoCommand,controlCommand,vibeCommand]);
      console.log('Registered /lumira-forget globally (may take time to appear)');
    }
  }catch(error){console.error('Slash command registration failed:',error)}
@@ -128,7 +135,15 @@ client.on(Events.InteractionCreate,async interaction=>{
   try{if(!['autoLore','autoScrapbook','spontaneous','roasts'].includes(key))throw Error('Invalid control');await setSetting(interaction.guildId,key,!settings(interaction.guildId)[key]);return interaction.update(liveboard(interaction.guildId))}
   catch(e){return interaction.reply({content:'Could not update: '+e.message,flags:MessageFlags.Ephemeral})}
  }
- if(!interaction.isChatInputCommand()||!['lumira-forget','lumira-memory','lumira-lore','lumira-scrapbook','lumira-ego','lumira-control'].includes(interaction.commandName))return;
+ if(!interaction.isChatInputCommand()||!['lumira-forget','lumira-memory','lumira-lore','lumira-scrapbook','lumira-ego','lumira-control','lumira-vibe'].includes(interaction.commandName))return;
+ if(interaction.commandName==='lumira-vibe'){
+  if(!interaction.inGuild())return interaction.reply({content:'Only available in LumiVibe.',flags:MessageFlags.Ephemeral});
+  const g=interaction.guildId,sub=interaction.options.getSubcommand(),v=vibe(g);
+  if(sub==='now')return interaction.reply({content:'🦋 **LumiVibe pulse**\\n'+v.label+'\\n'+v.volume+' public messages across '+v.channels+' channels in the last 24 hours (since Lumira last started). No private channels or personal profiles.',allowedMentions:{parse:[]}});
+  const entries=moments(g).slice(-5).filter(m=>/^https:\/\/discord(?:app)?\.com\/channels\//.test(m.url||''));
+  const lines=entries.map((m,i)=>(i+1)+'. '+m.url).join('\\n');
+  return interaction.reply({content:'📸 **LumiVibe scrapbook recap**\\n'+(lines||'No public moments saved yet. The scrapbook will grow as members react to posts.')+'\\nThese are saved links, not a summary of private conversations.',allowedMentions:{parse:[]}});
+ }
  if(interaction.commandName==='lumira-control'){
   if(!interaction.inGuild()||interaction.guild.ownerId!==interaction.user.id)return interaction.reply({content:'Only the server owner can use Lumira controls.',flags:MessageFlags.Ephemeral});
   try{
@@ -270,7 +285,6 @@ function safeSharedPhrase(text){
 }
 client.on(Events.MessageCreate,async message=>{
  if(!message.inGuild()||message.author.bot||message.webhookId||!publicSocialChannel(message.channel)||!settings(message.guildId).autoLore)return;
- bump(message.guildId,'messages');
  const phrase=safeSharedPhrase(message.content||'');
  if(!phrase)return;
  const key=message.guildId+':'+phrase.toLowerCase();
