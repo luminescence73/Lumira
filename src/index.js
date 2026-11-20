@@ -1,5 +1,5 @@
 import 'dotenv/config';
-import {loadAdmin,config,authorize,privateAccess,stage,discard,proposals,preview,applyGuild,layoutPreview,makeChannel,imageForEmoji,imageForSticker,layoutPlan,applyLayout,applyLayoutOnce,finishLayoutOnce,populateEmptySectionsOnce,reconcileLegacyChannelsOnce,organizeEverythingOnce,restoreOriginalChannelsOnce} from './admin.js';
+import {loadAdmin,config,authorize,privateAccess,stage,discard,proposals,preview,applyGuild,layoutPreview,makeChannel,imageForEmoji,imageForSticker,layoutPlan,applyLayout,applyLayoutOnce,finishLayoutOnce,populateEmptySectionsOnce,reconcileLegacyChannelsOnce,organizeEverythingOnce,restoreOriginalChannelsOnce,finishCleanupAndControlOnce} from './admin.js';
 import {loadRoster,syncRoster,roster,findMembers} from './roster.js';
 import {loadEvents,schedule,upcoming,dueEvents} from './events.js';
 import {loadPlayground,gameCard,vote,leaderboard,award,recentAwards} from './playground.js';
@@ -160,7 +160,7 @@ function canRespond(userId){const now=Date.now();if(now-(cooldown.get(userId)||0
 client.once(Events.ClientReady,async c=>{
  console.log('Lumira online as '+c.user.tag);
  console.log('Gateway intents:',intents.join(','),'guild count:',c.guilds.cache.size);
- for(const guild of c.guilds.cache.values()){console.log('Guild:',guild.id,'name:',guild.name,'bot member cached:',Boolean(guild.members.me));syncRoster(guild).catch(e=>console.error('Member directory sync:',e.message));if(guild.id==='1472157525490139174'){for(const [label,fn] of [['layout',applyLayoutOnce],['legacy cleanup',finishLayoutOnce],['voice and control',populateEmptySectionsOnce],['legacy organization',reconcileLegacyChannelsOnce],['full organization',organizeEverythingOnce],['restore original channel names',restoreOriginalChannelsOnce]]){try{const result=await fn(guild);console.log('LumiVibe '+label+':',JSON.stringify(result))}catch(e){console.error('LumiVibe '+label+' failed:',e.stack||e.message)}}}}
+ for(const guild of c.guilds.cache.values()){console.log('Guild:',guild.id,'name:',guild.name,'bot member cached:',Boolean(guild.members.me));syncRoster(guild).catch(e=>console.error('Member directory sync:',e.message));if(guild.id==='1472157525490139174'){for(const [label,fn] of [['layout',applyLayoutOnce],['legacy cleanup',finishLayoutOnce],['voice and control',populateEmptySectionsOnce],['legacy organization',reconcileLegacyChannelsOnce],['full organization',organizeEverythingOnce],['restore original channel names',restoreOriginalChannelsOnce],['duplicate cleanup and control posts',finishCleanupAndControlOnce]]){try{const result=await fn(guild);console.log('LumiVibe '+label+':',JSON.stringify(result))}catch(e){console.error('LumiVibe '+label+' failed:',e.stack||e.message)}}}}
 
  if(process.env.GEMINI_API_KEY){try{const answer=await replyTo('Reply with one short friendly greeting.');console.log('Gemini startup self-test succeeded; response length:',answer.length)}catch(error){console.error('Gemini startup self-test failed:',error.message)}}
  const memoryCommand=new SlashCommandBuilder().setName('lumira-memory').setDescription('Manage your own opt-in long-term memories')
