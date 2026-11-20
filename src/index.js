@@ -2,6 +2,7 @@ import 'dotenv/config';
 import {installOperations} from './operations.js';
 import {deliverEventReminders} from './event-delivery.js';
 import {socialDirection,playfulActivity} from './social-persona.js';
+import {courtPrompt,roastRound,quoteSubmit,quoteRound,emojiForSocialMessage} from './social-games.js';
 import {lumiVibeCanonContext} from './lumivibe-canon.js';
 import {organizeVisualEmojis} from './emoji-visual.js';
 import {quotaReady,quotaDelay,isQuotaFailure,retryDelay} from './gemini-quota.js';
@@ -257,6 +258,10 @@ client.once(Events.ClientReady,async c=>{
  .addSubcommand(s=>s.setName('rather').setDescription('Start a Would You Rather vote'))
  .addSubcommand(s=>s.setName('trivia').setDescription('Start a trivia round'))
  .addSubcommand(s=>s.setName('roulette').setDescription('Get a party game prompt'))
+ .addSubcommand(s=>s.setName('court').setDescription('Get a dramatic verdict on a silly dilemma').addStringOption(o=>o.setName('situation').setDescription('A harmless situation').setRequired(true).setMaxLength(400)))
+ .addSubcommand(s=>s.setName('roast').setDescription('Opt into a friendly roast battle'))
+ .addSubcommand(s=>s.setName('quote-add').setDescription('Submit your own approved quote for Who Said That?').addStringOption(o=>o.setName('quote').setDescription('Your own quote').setRequired(true).setMaxLength(180)))
+ .addSubcommand(s=>s.setName('who-said').setDescription('Play Who Said That? using approved quotes'))
  .addSubcommand(s=>s.setName('leaderboard').setDescription('See the trivia leaderboard'))
  .addSubcommand(s=>s.setName('award').setDescription('Give someone a silly fictional award').addUserOption(o=>o.setName('member').setDescription('Recipient').setRequired(true)).addStringOption(o=>o.setName('title').setDescription('Funny award title').setRequired(true).setMaxLength(75)))
  .addSubcommand(s=>s.setName('awards').setDescription('View recent fictional awards')).toJSON();
@@ -393,6 +398,14 @@ client.on(Events.InteractionCreate,async interaction=>{
   const sub=interaction.options.getSubcommand(),g=interaction.guildId;
   try{
    if(['rather','trivia','roulette'].includes(sub))return interaction.reply(gameCard(g,interaction.channelId,sub,interaction.user.id));
+   if(sub==='court'||sub==='roast'){
+    const instruction=sub==='court'?courtPrompt(interaction.options.getString('situation')):roastRound(g,interaction.channelId,interaction.user.id).prompt;
+    await interaction.deferReply();
+    const answer=await queuedReply(socialDirection({userId:interaction.user.id,ownerId:interaction.guild.ownerId,displayName:interaction.member?.displayName,username:interaction.user.username})+instruction);
+    return interaction.editReply({content:answer,allowedMentions:{parse:[]}});
+   }
+   if(sub==='quote-add'){quoteSubmit(g,interaction.channelId,interaction.user.id,interaction.options.getString('quote'));return interaction.reply({content:'📜 Your quote was added to this channel’s opt-in Who Said That? collection (until restart).',flags:MessageFlags.Ephemeral});}
+   if(sub==='who-said'){const round=quoteRound(g,interaction.channelId);return interaction.reply({content:'🕵️ **Who Said That?**\\n“'+round.quote+'”\\nGuess who submitted this quote! The answer is hidden for now. Ask the author to reveal themselves.',allowedMentions:{parse:[]}});}
    if(sub==='leaderboard')return interaction.reply({content:'🏆 **LumiVibe Trivia Leaderboard**\n'+leaderboard(g),allowedMentions:{parse:[]}});
    if(sub==='awards')return interaction.reply({content:'🏅 **Recent Fictional Awards**\n'+(recentAwards(g).map(a=>'<@'+a.to+'>: '+a.title).join('\n')||'No awards yet.'),allowedMentions:{parse:[]}});
    const target=interaction.options.getUser('member'),title=interaction.options.getString('title');
@@ -666,6 +679,16 @@ client.on(Events.MessageCreate,async message=>{
   console.log('Lumira made a spontaneous comment in an approved channel');
  }catch(error){console.error('Spontaneous comment skipped:',error.message)}
  finally{pendingChannels.delete(message.channelId)}
+});
+
+// Low-frequency, non-intrusive emoji reactions in approved public social channels.
+const lastSocialReaction=new Map();
+client.on(Events.MessageCreate,async message=>{
+ if(!spontaneousEnabled||!message.inGuild()||message.guildId!=='1472157525490139174'||message.author.bot||message.webhookId||!settings(message.guildId).spontaneous||!publicSocialChannel(message.channel)||memberMuted(message.guildId,message.author.id))return;
+ if(spontaneousChannels.size&&!spontaneousChannels.has(message.channelId))return;
+ const emoji=emojiForSocialMessage(message.content);
+ if(!emoji||Math.random()>0.12||Date.now()-(lastSocialReaction.get(message.channelId)||0)<25*60*1000)return;
+ try{await message.react(emoji);lastSocialReaction.set(message.channelId,Date.now())}catch(error){console.error('Social reaction skipped:',error.message)}
 });
 
 // Automatic social lore: repeated short public phrases by multiple people, no private history.
