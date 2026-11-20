@@ -120,3 +120,33 @@ export async function populateEmptySectionsOnce(guild){
  }
  s.layoutVersion=3;await save();return {alreadyDone:false,report};
 }
+
+export async function reconcileLegacyChannelsOnce(guild){
+ const s=state(guild.id);if(s.layoutVersion>=4)return {alreadyDone:true};
+ const me=await guild.members.fetchMe();if(!me.permissions.has(PermissionFlagsBits.ManageChannels))throw Error('Manage Channels permission required');
+ const report=[];const destinations=[
+ ['✦ GAMING',['sword-x-staff','general-gaming']],
+ ['✦ ARRIVALS',['new-members']],
+ ['✦ INTERESTS',['stars-charts-and-hoe-roscopes']],
+ ['✦ VOICE LOUNGE',['voice','gaming','chilling','music']]
+ ];
+ for(const [name,names] of destinations){
+  const cat=guild.channels.cache.find(x=>x.type===ChannelType.GuildCategory&&norm(x.name)===norm(name));if(!cat){report.push('Category missing: '+name);continue}
+  for(const ch of guild.channels.cache.values()){
+   if(ch.type!==ChannelType.GuildText&&ch.type!==ChannelType.GuildVoice)continue;
+   if(!names.includes(norm(ch.name)))continue;
+   if(ch.parentId===cat.id)continue;
+   await ch.setParent(cat.id,{lockPermissions:false,reason:'Owner-requested final LumiVibe organization'});
+   report.push('Moved '+ch.name+' into '+name);
+  }
+ }
+ // Do not create duplicate voice rooms if the original ones are still present.
+ const lounge=guild.channels.cache.find(x=>x.type===ChannelType.GuildCategory&&norm(x.name)===norm('✦ VOICE LOUNGE'));
+ if(lounge){
+  for(const name of ['General VC','Gaming VC','Chill VC']){
+   const duplicate=guild.channels.cache.find(x=>x.type===ChannelType.GuildVoice&&norm(x.name)===norm(name)&&x.parentId===lounge.id);
+   if(duplicate){report.push('Extra voice room retained: '+name)}
+  }
+ }
+ s.layoutVersion=4;await save();return {alreadyDone:false,report};
+}
