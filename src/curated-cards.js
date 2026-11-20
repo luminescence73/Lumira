@@ -26,6 +26,7 @@ export async function publishCuratedCards(guild){
    // Keep a stable synthetic key to avoid duplicate messages on restart.
    const key='curated:'+norm(item.name);
    const saved=profile(guild.id,key);
+   if(saved?.migratedTo){result.unmatched.push(item.name);continue;}
    const embed=new EmbedBuilder().setColor(0x9ebdff)
     .setTitle('✦ '+item.name+' | '+item.title)
     .setDescription(item.about)
@@ -53,7 +54,13 @@ export async function publishCuratedCards(guild){
    if(message){await message.edit({embeds:[embed],allowedMentions:{parse:[]}});result.updated++}
    else{message=await channel.send({embeds:[embed],allowedMentions:{parse:[]}});result.published++}
    await setProfile(guild.id,entry.id,{about:item.about,messageId:message.id,curated:true,updatedAt:Date.now()});
-   if(unlinked?.messageId===message.id)await setProfile(guild.id,'curated:'+norm(item.name),{migratedTo:entry.id,updatedAt:Date.now()});
+   if(unlinked?.messageId){
+    if(unlinked.messageId!==message.id){
+     const duplicate=await channel.messages.fetch(unlinked.messageId).catch(()=>null);
+     if(duplicate?.author?.id===guild.client.user.id){await duplicate.delete().catch(e=>result.errors.push(item.name+' duplicate cleanup: '+e.message));}
+    }
+    await setProfile(guild.id,'curated:'+norm(item.name),{migratedTo:entry.id,updatedAt:Date.now()});
+   }
   }catch(e){result.errors.push(item.name+': '+e.message)}
  }
  console.log('LumiVibe curated cards:',JSON.stringify(result));return result;
