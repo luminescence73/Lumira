@@ -186,7 +186,11 @@ installOperations(client);
 client.once(Events.ClientReady,async c=>{
  console.log('Lumira online as '+c.user.tag);
  console.log('Gateway intents:',intents.join(','),'guild count:',c.guilds.cache.size);
- for(const guild of c.guilds.cache.values()){console.log('Guild:',guild.id,'name:',guild.name,'bot member cached:',Boolean(guild.members.me));if(guild.id==='1472157525490139174')publishCuratedCards(guild).catch(e=>console.error('Immediate curated cards:',e.message));syncRoster(guild).then(()=>guild.id==='1472157525490139174'?populateMemberProfiles(guild,roster(guild)).then(()=>publishCuratedCards(guild)):null).catch(e=>console.error('Member card population:',e.message));if(guild.id==='1472157525490139174'){
+ for(const guild of c.guilds.cache.values()){console.log('Guild:',guild.id,'name:',guild.name,'bot member cached:',Boolean(guild.members.me));if(guild.id==='1472157525490139174'){
+   // Publish once immediately; roster sync may be slow or lack privileged member intent.
+   publishCuratedCards(guild).catch(e=>console.error('Curated cards:',e.message));
+  }
+  syncRoster(guild).then(()=>guild.id==='1472157525490139174'?populateMemberProfiles(guild,roster(guild)):null).catch(e=>console.error('Member card population:',e.message));if(guild.id==='1472157525490139174'){
    // Continue subject-based visual naming in moderate batches until all eligible emojis are processed.
    const runVisual=()=>organizeVisualEmojis(guild,{maxScans:8}).catch(e=>console.error('Visual emoji organization failed:',e.message));
    setTimeout(runVisual,60*1000).unref();
@@ -514,7 +518,7 @@ client.on(Events.InteractionCreate,async interaction=>{
    let message;
    if(saved?.messageId){try{message=await channel.messages.fetch(saved.messageId);await message.edit({embeds:[embed],allowedMentions:{parse:[]}})}catch(e){console.warn('Profile update, publishing replacement:',e.message);message=null}}
    if(!message)message=await channel.send({embeds:[embed],allowedMentions:{parse:[]}});
-   await setProfile(g,u,{about,messageId:message.id,updatedAt:Date.now()});
+   await setProfile(g,u,{about,messageId:message.id,updatedAt:Date.now(),automatic:false,curated:false});
    return interaction.reply({content:'Your profile card is live in <#'+channel.id+'>! 💙',flags:MessageFlags.Ephemeral,allowedMentions:{parse:[]}});
   }catch(e){console.error('Profile command:',e.message);return interaction.reply({content:'Could not update profile: '+e.message,flags:MessageFlags.Ephemeral})}
  }
