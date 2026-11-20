@@ -324,7 +324,7 @@ export async function refreshLiveboard(guild){
  const channel=guild.channels.cache.find(x=>x.type===ChannelType.GuildText&&x.parentId===control?.id&&norm(x.name)==='liveboard');
  if(!channel)throw Error('Liveboard channel missing');
  const bot=await guild.members.fetchMe();
- if(!bot.permissionsIn(channel).has(PermissionFlagsBits.SendMessages,PermissionFlagsBits.EmbedLinks))throw Error('Lumira needs Send Messages and Embed Links in liveboard');
+ if(!bot.permissionsIn(channel).has([PermissionFlagsBits.SendMessages,PermissionFlagsBits.EmbedLinks]))throw Error('Lumira needs Send Messages and Embed Links in liveboard');
  const emojis=await guild.emojis.fetch();
  const stickers=await guild.stickers.fetch();
  const embed=new EmbedBuilder()
