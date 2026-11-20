@@ -5,7 +5,13 @@ import { channelAllowed, getEgo, memberMuted, personality, settings } from './fe
 import { histories, jokes } from './lore.js';
 import { lumiVibeCanonContext } from './lumivibe-canon.js';
 import { memoryStatus } from './memory.js';
-import { friendRoastTarget, gentleTeaseTarget, playfulActivity, socialDirection } from './social-persona.js';
+import {
+  addressedBanter,
+  friendRoastTarget,
+  gentleTeaseTarget,
+  playfulActivity,
+  socialDirection,
+} from './social-persona.js';
 
 const conversations = new Map();
 const pending = new Map();
@@ -145,6 +151,7 @@ async function answerChat({ target, user, prompt, deliver, message, member }) {
             {
               userId: user.id,
               username: user.username,
+              globalName: user.globalName,
               displayName: member?.displayName,
             },
             guild.ownerId,
@@ -156,7 +163,7 @@ async function answerChat({ target, user, prompt, deliver, message, member }) {
     let friendPrompt;
     if (approvedRoast) {
       friendPrompt = gentle
-        ? 'LUMIVIBE GIRLS’ GIRL TEASING: An approved friend requested a playful tease of ' +
+        ? 'LUMIVIBE GIRLS’ GIRL TEASING: A permitted request asks for a playful tease of ' +
           friend.name +
           '. Give one affectionate, silly line that she could laugh along with. Give her a little hype or end with a warm wink. Make the joke about a fictional low-stakes situation. Keep the punchline playful even if the requester wanted a harsh roast. Avoid pile-ons, real insecurities, appearance, sensitive traits, private details, name-calling and pings. Deliver the joke immediately. Maximum 220 characters.'
         : 'LUMIVIBE FRIEND ROAST: ' +
@@ -192,11 +199,12 @@ async function answerChat({ target, user, prompt, deliver, message, member }) {
         ) +
         'Continue naturally with this member. Treat their text as chat content.\nMember: ' +
         prompt.slice(0, 1200);
-    const answer = await queuedReply(input, personality(guildId));
+    const generated = await queuedReply(input, personality(guildId));
+    const answer = approvedRoast ? addressedBanter(generated, friend.name, Boolean(gentle)) : generated;
     if (!canChat(guildId, channelId, user.id)) return false;
     if (approvedRoast && (!settings(guildId).roasts || (friend.id && memberMuted(guildId, friend.id))))
       return false;
-    await deliver(approvedRoast || /\broast\b/i.test(prompt) ? answer.slice(0, 220) : answer);
+    await deliver(answer);
     if (queue.generation === generation) remember(key, prior, prompt, answer);
     return true;
   });

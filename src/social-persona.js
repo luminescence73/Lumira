@@ -2,6 +2,7 @@
 const BOYS = new Set(['237586130038423552', '1495189750162657400', '1272841728952369172']);
 const normalize = (value) =>
   String(value || '')
+    .normalize('NFKD')
     .toLowerCase()
     .replace(/[^a-z0-9]/g, '');
 export function socialStyle({ userId, ownerId, displayName, username } = {}) {
@@ -55,24 +56,63 @@ export function friendRoastTarget(prompt, mentions, members) {
   return findBanterTarget(prompt, mentions, members, roastFriends);
 }
 
-export function gentleTeaseTarget(prompt, mentions, members, requester, ownerId) {
-  if (
-    requester.userId === ownerId ||
-    !roastFriends.some((friend) =>
-      friend.id
-        ? friend.id === requester.userId
-        : [requester.displayName, requester.username]
-            .map(normalize)
-            .some((label) => friend.aliases.includes(label)),
-    )
-  )
-    return null;
+const girls = [
+  { name: 'Lumi', aliases: ['lumi', 'luminescence73'] },
+  { name: 'Gracie', aliases: ['gracie', 'bgracie'] },
+  { name: 'Moonie', aliases: ['moonie', 'moony', 'meatshieldmoonie'] },
+];
 
-  return findBanterTarget(prompt, mentions, members, [
-    { name: 'Lumi', id: ownerId, aliases: ['lumi', 'luminescence73'] },
-    { name: 'Gracie', aliases: ['gracie', 'bgracie'] },
-    { name: 'Moonie', aliases: ['moonie', 'moony', 'meatshieldmoonie'] },
-  ]);
+export function gentleTeaseTarget(prompt, mentions, members, requester, ownerId) {
+  const requested = roastRequest.exec(prompt)?.groups;
+  if (!requested) return null;
+  const { userId, displayName, username } = requester;
+  const roster = girls.map((friend) => (friend.name === 'Lumi' ? { ...friend, id: ownerId } : friend));
+  const self =
+    userId === ownerId
+      ? roster[0]
+      : roster.find(
+          (friend) =>
+            !friend.id &&
+            [displayName, username, requester.globalName]
+              .map(normalize)
+              .some((label) => friend.aliases.includes(label)),
+        );
+  if (
+    self &&
+    (requested.id === userId ||
+      /^me$/i.test(requested.name) ||
+      (!requested.id && self.aliases.includes(normalize(requested.name))))
+  ) {
+    return { name: self.name, id: userId };
+  }
+
+  const approvedRequester = roastFriends.some((friend) =>
+    friend.id
+      ? friend.id === userId
+      : [displayName, username].map(normalize).some((label) => friend.aliases.includes(label)),
+  );
+  return approvedRequester ? findBanterTarget(prompt, mentions, members, roster) : null;
+}
+
+const otherNamePatterns = [...girls, ...roastFriends].map((friend) => ({
+  name: friend.name,
+  pattern: new RegExp('\\b(?:' + friend.aliases.join('|') + ')\\b', 'i'),
+}));
+
+export function addressedBanter(answer, target, gentle) {
+  const body = answer.trim().replace(new RegExp('^' + target + '\\s*[:,—-]\\s*', 'i'), '');
+  const canUse =
+    body.length > 0 &&
+    !/<@|@everyone|@here/i.test(body) &&
+    !otherNamePatterns.some(({ name, pattern }) => name !== target && pattern.test(body));
+  const fallback = gentle
+    ? 'you’d turn a snack run into a grand entrance. Honestly, I’d hold the door for the encore. 💙'
+    : 'you’d set the tutorial to hard mode and then ask why the loading screen has hands.';
+  const line = target + ', ' + (canUse ? body : fallback);
+  if (line.length <= 220) return line;
+  const clipped = line.slice(0, 219);
+  const sentence = clipped.match(/^.*[.!?](?=\s)/s)?.[0];
+  return sentence && sentence.length > target.length + 10 ? sentence : clipped.replace(/\s+\S*$/, '') + '…';
 }
 
 function findBanterTarget(prompt, mentions, members, eligible) {

@@ -342,6 +342,44 @@ test('the boys can request affectionate teasing of Lumi, Gracie, and Moonie with
   assert.match(prompts[1], /Roasts are disabled/);
 });
 
+test('Moonie’s self-mention cannot turn into a roast of Tee', async (t) => {
+  const { gentleTeaseTarget } = await import('../src/social-persona.js');
+  const moonie = { userId: '123', username: 'Moonie' };
+  assert.deepEqual(gentleTeaseTarget('roast me', null, null, moonie, 'owner'), { name: 'Moonie', id: '123' });
+  const replies = [];
+  const requests = [];
+  t.mock.method(globalThis, 'fetch', async (_url, options) => {
+    requests.push(JSON.parse(options.body).contents[0].parts[0].text);
+    return Response.json({
+      candidates: [{ content: { parts: [{ text: 'Tee, your build needs a tutorial.' }] } }],
+    });
+  });
+  const guild = { id: LUMIVIBE_GUILD_ID, ownerId: 'owner', roles: { everyone: {} } };
+  await setSetting(guild.id, 'roasts', true);
+  await handleDirectChat(
+    {
+      guild,
+      guildId: guild.id,
+      channelId: 'self-mention',
+      channel: { guild },
+      author: { id: '123', username: 'Moonie' },
+      mentions: {
+        users: new Map([
+          ['99', { id: '99' }],
+          ['123', { id: '123' }],
+        ]),
+      },
+      content: '<@99> roast <@123>',
+      reply: async (payload) => replies.push(payload),
+    },
+    '99',
+  );
+  assert.match(requests[0], /GIRLS’ GIRL TEASING.*Moonie/);
+  assert.match(replies[0].content, /^Moonie,/);
+  assert.doesNotMatch(replies[0].content, /Tee/);
+  assert.deepEqual(replies[0].allowedMentions, { parse: [], repliedUser: false });
+});
+
 test('Diva Court responds once using the deferred interaction, including on provider failure', async (t) => {
   process.env.GEMINI_API_KEY = 'fake-test-key';
   const fetchMock = t.mock.method(globalThis, 'fetch', async () => responses());
