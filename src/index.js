@@ -35,6 +35,29 @@ function liveboard(g){
  return {embeds:[embed],components:[new ActionRowBuilder().addComponents(buttons)],allowedMentions:{parse:[]}};
 }
 
+
+function vibeCard(g){
+ const v=vibe(g),s=settings(g);
+ return {embeds:[new EmbedBuilder().setColor(0x88caff).setTitle('🦋 LumiVibe • Live Pulse').setDescription('**'+v.label+'**')
+ .addFields({name:'💬 Public messages',value:String(v.volume),inline:true},{name:'🗂️ Active channels',value:String(v.channels),inline:true},{name:'📸 Saved moments',value:String(moments(g).length),inline:true})
+ .setFooter({text:'Last 24 hours since startup • excludes private channels'})],allowedMentions:{parse:[]}};
+}
+function scrapbookCard(g,page=0){
+ const entries=moments(g).slice().reverse(),total=entries.length;
+ if(!total)return {embeds:[new EmbedBuilder().setColor(0x88caff).setTitle('📸 LumiVibe Scrapbook').setDescription('No public moments saved yet. React to memorable posts to help fill this gallery!')],components:[]};
+ const p=Math.max(0,Math.min(page,total-1)),m=entries[p];
+ const embed=new EmbedBuilder().setColor(0x88caff).setTitle('📸 LumiVibe Scrapbook').setDescription('**Moment '+(p+1)+' of '+total+'**\\n[Open original Discord message]('+m.url+')')
+ .setFooter({text:'Public message links only • no private message content stored'});
+ const row=new ActionRowBuilder().addComponents(
+  new ButtonBuilder().setCustomId('lumira:gallery:'+Math.max(0,p-1)).setLabel('◀ Previous').setStyle(ButtonStyle.Secondary).setDisabled(p===0),
+  new ButtonBuilder().setCustomId('lumira:gallery:'+Math.min(total-1,p+1)).setLabel('Next ▶').setStyle(ButtonStyle.Primary).setDisabled(p===total-1));
+ return {embeds:[embed],components:[row],allowedMentions:{parse:[]}};
+}
+function egoCard(ego,user){
+ return {embeds:[new EmbedBuilder().setColor(0xa7b9ff).setTitle('🎭 Lumira Alter Ego').setDescription(ego)
+ .setThumbnail(user.displayAvatarURL({size:128})).setFooter({text:'Fictional, opt-in and removable at any time'})],allowedMentions:{parse:[]}};
+}
+
 const lastSpoke=new Map();
 const lastEvaluated=new Map();
 const pendingChannels=new Set();
@@ -118,7 +141,8 @@ client.once(Events.ClientReady,async c=>{
   .addBooleanOption(o=>o.setName('enabled').setDescription('On or off').setRequired(true))).toJSON();
  const vibeCommand=new SlashCommandBuilder().setName('lumira-vibe').setDescription('See LumiVibe activity and memorable moments')
  .addSubcommand(s=>s.setName('now').setDescription('See recent public chat activity'))
- .addSubcommand(s=>s.setName('recap').setDescription('Get a short recap from saved public scrapbook links')).toJSON();
+ .addSubcommand(s=>s.setName('recap').setDescription('Get a short recap from saved public scrapbook links'))
+ .addSubcommand(s=>s.setName('gallery').setDescription('Browse scrapbook moments as interactive cards')).toJSON();
  const privacyCommand=new SlashCommandBuilder().setName('lumira-privacy').setDescription('Control how Lumira interacts with you')
  .addSubcommand(s=>s.setName('mute').setDescription('Stop Lumira from reacting to or learning from your messages'))
  .addSubcommand(s=>s.setName('unmute').setDescription('Allow Lumira to interact with you again'))
@@ -140,6 +164,11 @@ client.once(Events.ClientReady,async c=>{
  }catch(error){console.error('Slash command registration failed:',error)}
 });
 client.on(Events.InteractionCreate,async interaction=>{
+ if(interaction.isButton()&&interaction.customId.startsWith('lumira:gallery:')){
+  if(!interaction.inGuild())return interaction.reply({content:'Only available in LumiVibe.',flags:MessageFlags.Ephemeral});
+  const page=Number(interaction.customId.split(':')[2]);if(!Number.isSafeInteger(page)||page<0)return interaction.reply({content:'Invalid page.',flags:MessageFlags.Ephemeral});
+  return interaction.update(scrapbookCard(interaction.guildId,page));
+ }
  if(interaction.isButton()&&interaction.customId.startsWith('lumira:toggle:')){
   if(!interaction.inGuild()||interaction.guild.ownerId!==interaction.user.id)return interaction.reply({content:'Only the server owner can change these settings.',flags:MessageFlags.Ephemeral});
   const key=interaction.customId.split(':')[2];
@@ -168,7 +197,8 @@ client.on(Events.InteractionCreate,async interaction=>{
  if(interaction.commandName==='lumira-vibe'){
   if(!interaction.inGuild())return interaction.reply({content:'Only available in LumiVibe.',flags:MessageFlags.Ephemeral});
   const g=interaction.guildId,sub=interaction.options.getSubcommand(),v=vibe(g);
-  if(sub==='now')return interaction.reply({content:'🦋 **LumiVibe pulse**\\n'+v.label+'\\n'+v.volume+' public messages across '+v.channels+' channels in the last 24 hours (since Lumira last started). No private channels or personal profiles.',allowedMentions:{parse:[]}});
+  if(sub==='now')return interaction.reply(vibeCard(g));
+  if(sub==='gallery')return interaction.reply(scrapbookCard(g));
   const entries=moments(g).slice(-5).filter(m=>/^https:\/\/discord(?:app)?\.com\/channels\//.test(m.url||''));
   const lines=entries.map((m,i)=>(i+1)+'. '+m.url).join('\\n');
   return interaction.reply({content:'📸 **LumiVibe scrapbook recap**\\n'+(lines||'No public moments saved yet. The scrapbook will grow as members react to posts.')+'\\nThese are saved links, not a summary of private conversations.',allowedMentions:{parse:[]}});
@@ -188,11 +218,11 @@ client.on(Events.InteractionCreate,async interaction=>{
   const sub=interaction.options.getSubcommand(),g=interaction.guildId,u=interaction.user.id;
   try{
    if(sub==='reset'){await clearEgo(g,u);return interaction.reply({content:'Your fictional alter ego has been deleted. 💙',flags:MessageFlags.Ephemeral})}
-   if(sub==='view'){const ego=getEgo(g,u);return interaction.reply({content:ego?'Your alter ego: '+ego:'You have no alter ego yet. Use /lumira-ego create!',flags:MessageFlags.Ephemeral,allowedMentions:{parse:[]}})}
+   if(sub==='view'){const ego=getEgo(g,u);return interaction.reply(ego?{...egoCard(ego,interaction.user),flags:MessageFlags.Ephemeral}:{content:'You have no alter ego yet. Use /lumira-ego create!',flags:MessageFlags.Ephemeral})}
    await interaction.deferReply({flags:MessageFlags.Ephemeral});
    const generated=(await replyTo('Invent a ridiculous but affectionate fictional alter ego for a Discord member. This is consensual fiction, not a factual personality assessment. Output ONLY a funny title and a single punchy sentence, under 200 characters. No real personal facts or protected traits.')).slice(0,220);
    await setEgo(g,u,generated);
-   return interaction.editReply({content:'Your new alter ego: '+generated});
+   return interaction.editReply(egoCard(generated,interaction.user));
   }catch(e){console.error('Alter ego error:',e.message);return interaction.deferred?interaction.editReply({content:'Alter ego failed. Try again.'}):interaction.reply({content:'Alter ego failed. Try again.',flags:MessageFlags.Ephemeral})}
  }
  if(['lumira-lore','lumira-scrapbook'].includes(interaction.commandName)){
