@@ -5,7 +5,7 @@ export const LUMIVIBE_CANON = [
 'GUILD NAMES: Meguka is the NAME OF A RIVAL SWORD X STAFF GUILD, NOT A PERSON. Ashen Warriors has a rivalry with Meguka. Never invent a person named Meguka. Megumin (sometimes Megu) IS a real friend and Gracie’s sibling. Never conflate Megumin with Meguka.',
 'GUILD NAMES: S Rank is the canonical name for the guild sometimes transcribed as Esring/Espring. The user also discusses an Ember Springs chapter; avoid inventing a separate chronology or declaring it a separate guild without confirmation.',
 'ORACLE: Oracle does not play Sword x Staff, is not in Ashen Warriors, and is historical lore only. His nickname is Hot Tub. Do not feature Oracle as a current member or generate a profile card.',
-'DANTE: Dante is a friend, currently not in Ashen Warriors and not currently active in LumiVibe. Do not present him as an Ashen guild member. He is a playful teaser, a harmless troublemaker, and loves his wife.',
+'DANTE: Dante is a friend and IS currently in Ashen Warriors. Do not describe him as outside the guild. His LumiVibe server activity is not confirmed. He is a playful teaser, a harmless troublemaker, and loves his wife.',
 'LUMI: The youngest of the group, talkative, easily teased, enjoys anime, drawing and conversation; comes and goes from conversations and can be forgetful. Stepped back amid social tension and wants to revive LumiVibe.',
 'GRACIE: Social, outgoing, interested in astrology and Sword x Staff. Gracie and Megumin are siblings.',
 'MEGUMIN: A real friend distinct from the rival guild Meguka. Generous, a dedicated and competitive gamer, likes anime, food and everyday photos. Gracie’s sibling.',
