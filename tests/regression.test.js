@@ -35,3 +35,16 @@ test('diva court validates low-stakes prompts',()=>{assert.match(courtPrompt('So
 test('roast battles only target a consenting participant and have a round limit',()=>{const g='test-roast',c='test';assert.equal(roastRound(g,c,'a').done,false);assert.throws(()=>roastRound(g,c,'b'),/stage/);for(let i=0;i<4;i++)roastRound(g,c,'a');assert.equal(roastRound(g,c,'a').done,true)});
 test('Who Said That uses submitted quotes and checks guesses',()=>{const g='test-quote',c='test';quoteSubmit(g,c,'a','I am the cookie queen');quoteSubmit(g,c,'b','My dragon ate the homework');const round=quoteRound(g,c);assert.ok(round.quote);assert.equal(guessQuote(g,c,'someone-else').correct,false)});
 test('emoji reactions use low-risk social triggers',()=>{assert.equal(emojiForSocialMessage('that was so funny lol'),'😭');assert.equal(emojiForSocialMessage('slay queen'),'💅');assert.equal(emojiForSocialMessage('here is my private link https://example.com'),null)});
+
+import {classificationAction,uniqueEmojiName} from '../src/emoji-visual.js';
+test('emoji classifier revisits legacy prefixes and stale review entries',()=>{
+ assert.equal(classificationAction({name:'pika_unknown'},undefined),'scan');
+ assert.equal(classificationAction({name:'pika_old'},{status:'renamed',name:'pika_old'}),'skip');
+ assert.equal(classificationAction({name:'anime_old'},{status:'review',at:1},Date.now()),'scan');
+ assert.equal(classificationAction({name:'animal_cat'},{status:'verified',name:'animal_cat'}),'skip');
+});
+test('emoji naming produces unique subject-based names',()=>{
+ assert.equal(uniqueEmojiName('pika','pikachu_laughing',new Set(),'old'),'pika_pikachu_laughing');
+ assert.equal(uniqueEmojiName('meme','pepe_laughing',new Set(['meme_pepe_laughing']),'old'),'meme_pepe_laughing_2');
+ assert.throws(()=>uniqueEmojiName('unknown','face',new Set(),'old'));
+});
