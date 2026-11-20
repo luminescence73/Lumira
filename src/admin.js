@@ -68,7 +68,7 @@ export async function applyLayoutOnce(guild){const s=state(guild.id);if(s.layout
 
 const extraChannelDestinations={
  'game-announcements':'✦ GAMING','gift-codes':'✦ GAMING',
- 'bot-carl-private':'✦ LUMIRA CONTROL','carl-bot':'✦ LUMIRA CONTROL',
+ 'bot-carl-private':'✦ PRIVATE GALLERIES','carl-bot':'✦ COMMONS',
  'lumi-sxs':'✦ PRIVATE GALLERIES','lumi-private':'✦ PRIVATE GALLERIES',
  'heart-of-the-sea':'✦ PRIVATE GALLERIES','a-father-s-promise':'✦ PRIVATE GALLERIES',
  'sage-sxs':'✦ PRIVATE GALLERIES'
