@@ -1,6 +1,6 @@
 import 'dotenv/config';
-import {loadFeatures,settings,setSetting,getEgo,setEgo,clearEgo} from './features.js';
-import {loadLore,jokes,moments,addJoke,deleteJoke,addMoment,deleteMoment} from './lore.js';
+import {loadFeatures,settings,setSetting,getEgo,setEgo,clearEgo,scrapbookAllowed,setScrapbookOptOut} from './features.js';
+import {loadLore,jokes,moments,addJoke,deleteJoke,addMoment,deleteMoment,removeAuthorMoments,removeMessageMoment} from './lore.js';
 import { loadMemories, memoryStatus, enableMemory, saveMemory, removeMemory, disableMemory } from './memory.js';
 import { Client, GatewayIntentBits, Events, MessageFlags, PermissionFlagsBits, SlashCommandBuilder, Partials, EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 const token=process.env.DISCORD_TOKEN;
@@ -101,6 +101,8 @@ client.once(Events.ClientReady,async c=>{
  const scrapbookCommand=new SlashCommandBuilder().setName('lumira-scrapbook').setDescription('Save and browse memorable public posts')
  .addSubcommand(s=>s.setName('save').setDescription('Save a public message by its link').addStringOption(o=>o.setName('link').setDescription('Discord message link').setRequired(true)))
  .addSubcommand(s=>s.setName('list').setDescription('Browse saved moments'))
+ .addSubcommand(s=>s.setName('optout').setDescription('Stop automatic saving of your posts and remove old saved links'))
+ .addSubcommand(s=>s.setName('optin').setDescription('Allow your public posts to be auto-saved again'))
  .addSubcommand(s=>s.setName('remove').setDescription('Remove your saved moment, or moderator remove any').addIntegerOption(o=>o.setName('number').setDescription('Moment number').setRequired(true).setMinValue(1))).toJSON();
  const egoCommand=new SlashCommandBuilder().setName('lumira-ego').setDescription('Your optional fictional LumiVibe alter ego')
  .addSubcommand(s=>s.setName('create').setDescription('Generate a funny fictional persona for yourself'))
@@ -178,12 +180,15 @@ client.on(Events.InteractionCreate,async interaction=>{
     if(sub==='remove'){if(!mod)throw Error('Only moderators can remove server lore');await deleteJoke(guild,interaction.options.getInteger('number'));result='Inside joke removed. 💙'}
    }else{
     if(sub==='list'){const entries=moments(guild);result=entries.length?entries.map((x,i)=>(i+1)+'. '+x.url).join('\\n'):'No scrapbook moments saved yet.'}
+    if(sub==='optout'){await setScrapbookOptOut(guild,interaction.user.id,true);const removed=await removeAuthorMoments(guild,interaction.user.id);result='Your public posts will no longer be automatically saved. Removed '+removed+' existing scrapbook links. 💙'}
+    if(sub==='optin'){await setScrapbookOptOut(guild,interaction.user.id,false);result='You can now appear in the automatic scrapbook again. 💙'}
     if(sub==='save'){
      const link=interaction.options.getString('link').trim(),match=link.match(/^https:\/\/(?:canary\.|ptb\.)?discord(?:app)?\.com\/channels\/(\\d+)\/(\\d+)\/(\\d+)$/);
      if(!match||match[1]!==guild)throw Error('Provide a message link from this server');
      const channel=await interaction.guild.channels.fetch(match[2]);
      if(!channel||!publicSocialChannel(channel)||!channel.messages?.fetch)throw Error('Only public text-channel posts can be saved');
      const msg=await channel.messages.fetch(match[3]);
+     if(!scrapbookAllowed(guild,msg.author.id))throw Error('This member opted out of the scrapbook');
      if(msg.author.bot||!msg.content?.trim())throw Error('Only text posts from members can be saved');
      if(msg.author.id!==interaction.user.id&&!mod)throw Error('You can save your own posts; moderators can save other public posts');
      await addMoment(guild,{messageId:msg.id,url:msg.url,by:interaction.user.id,author:msg.author.id,at:Date.now()});result='Moment saved to the scrapbook! 📸';
@@ -302,7 +307,7 @@ client.on(Events.MessageReactionAdd,async (reaction,user)=>{
  try{
   if(reaction.partial)reaction=await reaction.fetch();
   const message=reaction.message.partial?await reaction.message.fetch():reaction.message;
-  if(!message.inGuild()||message.author.bot||!publicSocialChannel(message.channel)||!settings(message.guildId).autoScrapbook||!message.content?.trim())return;
+  if(!message.inGuild()||message.author.bot||!publicSocialChannel(message.channel)||!settings(message.guildId).autoScrapbook||!scrapbookAllowed(message.guildId,message.author.id)||!message.content?.trim())return;
   if(message.content.length>1000||/\\b(?:password|address|phone number|medical|therapy)\\b/i.test(message.content))return;
   const unique=new Set();
   for(const r of message.reactions.cache.values()){
@@ -319,5 +324,6 @@ client.on(Events.MessageReactionAdd,async (reaction,user)=>{
  }catch(e){console.error('Auto scrapbook skipped:',e.message)}
 });
 
+client.on(Events.MessageDelete,async message=>{if(!message.guildId)return;try{await removeMessageMoment(message.guildId,message.id)}catch(e){console.error('Scrapbook deletion sync:',e.message)}});
 // Passive participation requires the Message Content privileged intent in Discord Developer Portal.
 await client.login(token);
