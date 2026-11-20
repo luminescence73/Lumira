@@ -10,8 +10,7 @@ const cards=[
  {name:'Tee',aliases:['tee'],title:'The Loyal Teaser',about:'Loyal, friendly, and fond of teasing the group. Enjoys music and testing Sword x Staff builds.',tags:'🛡️ SxS Builds • Music'},
  {name:'Moonie',aliases:['moonie','moony'],title:'Meat Shield Moony',about:'A sweet, sociable presence in the group, famous for the Meat Shield Moony nickname and frequent “I’m bored” moments.',tags:'💬 Social • Inside Jokes'},
  {name:'Dante',aliases:['dante'],title:'The Playful Instigator',about:'A friend in the wider community, known for playful banter. Dante is not currently a member of the Ashen Warriors guild.',tags:'😈 Banter • Community'},
- {name:'Kiz',aliases:['kiz'],title:'The Competitive Player',about:'A more reserved gamer who enjoys competitive Sword x Staff and Call of Duty.',tags:'🎮 SxS • Call of Duty'},
- {name:'Oracle',aliases:['oracle'],title:'Hot Tub',about:'Known among friends by the nickname “Hot Tub.” Oracle does not play Sword x Staff and is not a member of Ashen Warriors.',tags:'♨️ Inside Jokes • Friends'}
+ {name:'Kiz',aliases:['kiz'],title:'The Competitive Player',about:'A more reserved gamer who enjoys competitive Sword x Staff and Call of Duty.',tags:'🎮 SxS • Call of Duty'}
 ];
 const norm=s=>String(s||'').toLowerCase().replace(/[^a-z0-9]/g,'');
 export async function publishCuratedCards(guild){
