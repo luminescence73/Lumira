@@ -65,3 +65,26 @@ for(let j=0;j<section.channels.length;j++){const name=section.channels[j],keys=[
 }return report}
 
 export async function applyLayoutOnce(guild){const s=state(guild.id);if(s.layoutVersion===1)return {alreadyDone:true};const report=await applyLayout(guild);s.layoutVersion=1;await save();return {alreadyDone:false,report}}
+
+const extraChannelDestinations={
+ 'game-announcements':'✦ GAMING','gift-codes':'✦ GAMING',
+ 'bot-carl-private':'✦ LUMIRA CONTROL','carl-bot':'✦ LUMIRA CONTROL',
+ 'lumi-sxs':'✦ PRIVATE GALLERIES','lumi-private':'✦ PRIVATE GALLERIES',
+ 'heart-of-the-sea':'✦ PRIVATE GALLERIES','a-father-s-promise':'✦ PRIVATE GALLERIES',
+ 'sage-sxs':'✦ PRIVATE GALLERIES'
+};
+export async function finishLayoutOnce(guild){
+ const s=state(guild.id);if(s.layoutVersion>=2)return {alreadyDone:true};
+ const report=[];const bot=await guild.members.fetchMe();
+ if(!bot.permissions.has(PermissionFlagsBits.ManageChannels))throw Error('Lumira needs Manage Channels');
+ for(const ch of guild.channels.cache.values()){
+  if(ch.type!==ChannelType.GuildText)continue;
+  const dest=extraChannelDestinations[norm(ch.name)];if(!dest)continue;
+  const cat=guild.channels.cache.find(x=>x.type===ChannelType.GuildCategory&&norm(x.name)===norm(dest));if(!cat){report.push('Missing category '+dest);continue}
+  if(ch.parentId===cat.id)continue;
+  // Preserve existing per-channel overrides. Never sync with parent when relocating private channels.
+  await ch.setParent(cat.id,{lockPermissions:false,reason:'Owner-requested LumiVibe sidebar cleanup'});
+  report.push('Moved '+ch.name+' to '+dest);
+ }
+ s.layoutVersion=2;await save();return {alreadyDone:false,report};
+}
