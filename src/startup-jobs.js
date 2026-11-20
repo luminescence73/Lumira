@@ -1,3 +1,4 @@
+import { checkChatProvider } from './ai.js';
 import { Events } from 'discord.js';
 import {
   applyLayoutOnce,
@@ -63,6 +64,7 @@ async function prepareGuild(guild) {
 export function installReadyJobs(client, scheduleInterval, scheduleTimeout) {
   client.once(Events.ClientReady, (readyClient) => {
     console.log('Lumira online as ' + readyClient.user.tag);
+    void checkChatProvider();
     void runJob('slash command registration', async () => {
       const guildId = process.env.DISCORD_GUILD_ID;
       const commands = guildId

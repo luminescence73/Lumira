@@ -1,3 +1,4 @@
+import { setTimeout as delay } from 'node:timers/promises';
 import { quotaReady, quotaDelay, isQuotaFailure, retryDelay } from './gemini-quota.js';
 const SYSTEM = [
   'You are Lumira, the witty adult Discord friend in LumiVibe. Lumi is a human member and owner. Never speak on her behalf.',
@@ -17,18 +18,18 @@ async function replyTo(text, style = 'chaotic') {
   const key = process.env.GEMINI_API_KEY;
   if (!key) throw new Error('GEMINI_API_KEY missing');
   const models = [
-    ...new Set([
-      process.env.GEMINI_MODEL || 'gemini-3.5-flash-lite',
-      'gemini-3.5-flash-lite',
-      'gemini-3.8-flash',
-      'gemini-2.5-flash-lite',
-      'gemini-2.5-flash',
-    ]),
+    ...new Set(
+      [process.env.GEMINI_MODEL, 'gemini-3.5-flash-lite', 'gemini-3.1-flash-lite', 'gemini-3.8-flash'].filter(
+        Boolean,
+      ),
+    ),
   ];
-  for (const model of models) {
-    if (!quotaReady(model)) continue;
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 22000);
+  const deadline = Date.now() + 30_000;
+  const transient = [];
+
+  async function attempt(model) {
+    const remaining = deadline - Date.now();
+    if (!quotaReady(model) || !quotaReady('chat:' + model) || remaining <= 0) return {};
     try {
       const res = await fetch(
         'https://generativelanguage.googleapis.com/v1beta/models/' +
@@ -36,40 +37,65 @@ async function replyTo(text, style = 'chaotic') {
           ':generateContent',
         {
           method: 'POST',
-          signal: controller.signal,
+          signal: AbortSignal.timeout(Math.min(8_000, remaining)),
           headers: { 'x-goog-api-key': key, 'Content-Type': 'application/json' },
           body: JSON.stringify({
             systemInstruction: { parts: [{ text: SYSTEM }] },
-            contents: [{ role: 'user', parts: [{ text: text }] }],
+            contents: [{ role: 'user', parts: [{ text }] }],
             generationConfig: { maxOutputTokens: 200, temperature: 0.9 },
           }),
         },
       );
       if (!res.ok) {
-        const error = await res.json().catch(() => ({}));
-        console.warn('Gemini model', model, 'HTTP', res.status);
-        if (isQuotaFailure(res.status, error.error?.message)) {
-          quotaDelay(model, retryDelay(res, error.error?.message || ''));
-          continue;
+        const { error } = await res.json().catch(() => ({}));
+        console.warn('Gemini chat model', model, 'HTTP', res.status);
+        if (isQuotaFailure(res.status, error?.message)) {
+          quotaDelay(model, retryDelay(res, error?.message || ''));
+        } else if (res.status === 404) {
+          quotaDelay('chat:' + model, 60 * 60_000);
+        } else if ([408, 500, 502, 503, 504].includes(res.status)) {
+          return { retry: true, wait: res.headers.has('retry-after') ? retryDelay(res) : 0 };
         }
-        if ([400, 404, 500, 502, 503, 504].includes(res.status)) continue;
-        throw new Error('Gemini API error ' + res.status);
+        return { stop: [401, 402, 403].includes(res.status) && !isQuotaFailure(res.status, error?.message) };
       }
       const data = await res.json();
       const answer = data.candidates?.[0]?.content?.parts
-        ?.filter((p) => typeof p.text === 'string')
-        .map((p) => p.text)
+        ?.filter((part) => !part.thought && typeof part.text === 'string')
+        .map((part) => part.text)
         .join('')
         .trim();
-      if (answer) return answer.slice(0, 1800);
-      console.error('Gemini returned no text using', model);
+      if (answer) return { answer: answer.slice(0, 1800), model };
+      console.warn('Gemini returned no chat text using', model);
+      return {};
     } catch (error) {
-      console.error('Gemini attempt failed on', model, error.name === 'AbortError' ? 'timeout' : error.message);
-    } finally {
-      clearTimeout(timeout);
+      console.warn('Gemini chat attempt failed on', model, error.name);
+      return { retry: true, wait: 0 };
     }
   }
-  throw new Error('All Gemini models failed');
+
+  for (const model of models) {
+    const result = await attempt(model);
+    if (result.answer) return result;
+    if (result.stop) throw new Error('Gemini chat credentials or billing unavailable');
+    if (result.retry) transient.push({ model, wait: result.wait });
+  }
+  const retry = transient.find(({ wait }) => Date.now() + Math.max(wait, 1200) + 1000 < deadline);
+  if (retry) {
+    await delay(Math.max(retry.wait, 1000 + Math.floor(Math.random() * 200)));
+    const result = await attempt(retry.model);
+    if (result.answer) return result;
+  }
+  throw new Error('Gemini chat is temporarily unavailable');
+}
+
+export async function checkChatProvider() {
+  if (!process.env.GEMINI_API_KEY) return;
+  try {
+    const { model } = await replyTo('This is a technical connectivity check. Reply with only the word ready.');
+    console.log('Gemini chat startup check succeeded using', model);
+  } catch (error) {
+    console.warn('Gemini chat startup check:', error.message);
+  }
 }
 // Limit simultaneous AI calls to prevent bursts from overwhelming the provider.
 const aiQueue = [];
@@ -91,7 +117,7 @@ function drainAiQueue() {
     }
     aiActive++;
     replyTo(task.input, task.style)
-      .then(task.resolve, task.reject)
+      .then(({ answer }) => task.resolve(answer), task.reject)
       .finally(() => {
         aiActive--;
         drainAiQueue();
