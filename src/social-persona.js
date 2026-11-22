@@ -50,7 +50,8 @@ const roastFriends = [
   { name: 'Kiz', id: '224399760616980481', aliases: ['kiz'] },
 ];
 
-PLACEHOLDER
+const roastRequest =
+  /^(?:(?:please|can you|could you|would you|will you|just|girl)[\s,]+)*(?:roast|make fun of|tease|drag|insult|clown on)\s+(?:<@!?(?<id>\d+)>|@?(?<name>[a-z][a-z0-9_]*))/i;
 
 export function friendRoastTarget(prompt, mentions, members) {
   return findBanterTarget(prompt, mentions, members, roastFriends);
