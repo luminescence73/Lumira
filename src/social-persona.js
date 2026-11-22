@@ -122,7 +122,7 @@ function findBanterTarget(prompt, mentions, members, eligible) {
     : [normalize(name)];
   const friend =
     (id && eligible.find((entry) => entry.id === id)) ||
-    eligible.find((entry) => (!id || !entry.id) && entry.aliases.some((alias) => labels.includes(alias)));
+    eligible.find((entry) => entry.aliases.some((alias) => labels.includes(alias)));
   if (!friend) return null;
   const member =
     !id && !friend.id
