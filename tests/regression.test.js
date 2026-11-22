@@ -1,6 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import { isQuotaFailure, retryDelay } from '../src/gemini-quota.js';
 import { lumiVibeCanonContext } from '../src/lumivibe-canon.js';
 
@@ -96,9 +99,8 @@ test('emoji naming produces unique subject-based names', () => {
 
 
 test('social lore requires both members to approve friendship dynamics',async()=>{
- process.env.LUMIRA_DATA_DIR = (await import('node:fs/promises')).mkdtemp
-   ? await (await import('node:fs/promises')).mkdtemp((await import('node:path')).join((await import('node:os')).tmpdir(), 'lumira-social-lore-'))
-   : '/tmp/lumira-regression-social-lore';
+ const dir = await mkdtemp(path.join(tmpdir(), 'lumira-social-lore-'));
+ process.env.LUMIRA_DATA_DIR = dir;
  const {loadSocialLore,proposeLore,loreEntries,pendingLore,approveLore,deleteSocialLore,socialLoreContext} = await import('../src/social-lore.js');
  await loadSocialLore();
  const guild='test-'+Date.now();
