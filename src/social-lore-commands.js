@@ -35,7 +35,7 @@ export async function socialLoreCommand(i){
   if(sub==='remove'){
    const mod=owner;
    const id=i.options.getString('id');
-   const legacy=id.match(/^legacy-(joke|history)-(\\d+)$/);
+   const legacy=id.match(/^legacy-(joke|history)-([0-9]+)$/);
    if(legacy){
     if(!owner)throw Error('Only Lumi can remove legacy lore');
     if(legacy[1]==='joke')await deleteJoke(i.guildId,Number(legacy[2]));
