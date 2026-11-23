@@ -1,4 +1,4 @@
-import { socialLoreCommand } from './social-lore-commands.js';
+import { socialLoreCommand, socialLoreButton } from './social-lore-commands.js';
 import { copyExpressionCommand } from './expression-copy.js';
 import { egoCommand, memoryCommand, privacyCommand, profileCommand } from './member-commands.js';
 import { MessageFlags } from 'discord.js';
@@ -42,6 +42,7 @@ const commands = new Map([
 
 const buttons = new Map([
   ['game', voteButton],
+  ['lore', socialLoreButton],
   ['studio', studioButton],
   ['gallery', galleryButton],
   ['toggle', controlButton],
