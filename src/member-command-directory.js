@@ -50,7 +50,7 @@ export function memberCommandPages() {
  return groups.map(([heading,names],index)=>{
   const embed=new EmbedBuilder().setColor(0x8db8ef).setTitle(heading)
    .setFooter({text:footerMarker+' • '+(index+1)+'/'+groups.length});
-  if(index===0)embed.setDescription('🌙 **LumiVibe's little command guide**\nChoose a command below and type it in chat. Lore submissions wait for Lumi’s approval.');
+  if(index===0)embed.setDescription('🌙 **LumiVibe command guide**\nChoose a command below and type it in chat. Lore submissions wait for Lumi’s approval.');
   for(const name of names){
    const cmd=definitions.get(name);if(!cmd)continue;
    const options=cmd.options?.filter(o=>!hidden[name]?.has(o.name))||[];
