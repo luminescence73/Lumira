@@ -287,7 +287,7 @@ test('Tee can request a playful roast of Mitsuto by mention, and the roast switc
   };
   await setSetting(guild.id, 'roasts', true);
   await handleDirectChat(message, '99');
-  assert.match(prompts[0], /roast directed at Mitsuto only/i);
+  assert.match(prompts[0], /roast request targets Mitsuto .*directed ONLY at Mitsuto/i);
   await setMemberMuted(guild.id, '1495189750162657400', true);
   await handleDirectChat(message, '99');
   assert.equal(prompts.length, 1);
@@ -332,7 +332,7 @@ test('the boys can request affectionate teasing of Lumi, Gracie, and Moonie with
   };
   await setSetting(guild.id, 'roasts', true);
   await handleDirectChat(message, '99');
-  assert.match(prompts[0], /GIRLS’ GIRL TEASING/);
+  assert.match(prompts[0], /roast request targets Lumi .*directed ONLY at Lumi/i);
   await setMemberMuted(guild.id, ownerId, true);
   await handleDirectChat(message, '99');
   assert.equal(prompts.length, 1);
@@ -374,7 +374,7 @@ test('Moonie’s self-mention cannot turn into a roast of Tee', async (t) => {
     },
     '99',
   );
-  assert.match(requests[0], /GIRLS’ GIRL TEASING.*Moonie/);
+  assert.match(requests[0], /roast request targets Moonie .*directed ONLY at Moonie/i);
   assert.match(replies[0].content, /^Moonie,/);
   assert.doesNotMatch(replies[0].content, /Tee/);
   assert.deepEqual(replies[0].allowedMentions, { parse: [], repliedUser: false });
