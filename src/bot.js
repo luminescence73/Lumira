@@ -1,4 +1,4 @@
-import { registerSocialLoreCommand } from './register-social-lore.js';
+import { commandDefinitions } from './command-schema.js';
 import { loadSocialLore } from './social-lore.js';
 import { Client, Events, GatewayIntentBits, Partials } from 'discord.js';
 import { loadAdmin } from './admin.js';
@@ -92,7 +92,18 @@ export async function startBot({ token, client, scheduleInterval, scheduleTimeou
     client = createClient({ memberEvents });
   }
   installBot(client, { scheduleInterval, scheduleTimeout });
-  await registerSocialLoreCommand().catch(error=>console.warn('Lorebook registration:',error.message));
+  client.once(Events.ClientReady, async () => {
+    try {
+      // Replace stale global commands, then remove guild-scoped duplicates.
+      await client.application.commands.set(commandDefinitions());
+      for (const guild of client.guilds.cache.values()) {
+        await guild.commands.set([]);
+      }
+      console.log('Lumira slash commands synchronized');
+    } catch (error) {
+      console.error('Lumira slash command synchronization failed:',error.message);
+    }
+  });
   await client.login(token);
   return client;
 }
