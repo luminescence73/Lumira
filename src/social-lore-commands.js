@@ -1,5 +1,6 @@
 import { MessageFlags, PermissionFlagsBits } from 'discord.js';
 import { LUMIVIBE_GUILD_ID } from './channels.js';
+import { jokes,histories,deleteJoke,deleteHistory } from './lore.js';
 import { loreEntries,proposeLore,pendingLore,reviewLore,approveLore,rejectLore,deleteSocialLore } from './social-lore.js';
 const safe={parse:[]};
 export async function socialLoreCommand(i){
@@ -7,8 +8,10 @@ export async function socialLoreCommand(i){
  const sub=i.options.getSubcommand();
  try{
   if(sub==='browse'||sub==='search'){
-   const entries=loreEntries(i.guildId,{term:i.options.getString('query')||''});
-   return i.reply({content:entries.length?'📖 **LumiVibe Lorebook**\n'+entries.slice(0,10).map(e=>'**'+e.title+'** ['+e.kind+'] ('+e.id+')\n'+e.text).join('\n\n'):'No matching approved lore yet.',flags:MessageFlags.Ephemeral,allowedMentions:safe});
+   const term=i.options.getString('query')||'';
+   const legacy=[...jokes(i.guildId).map((e,n)=>({id:'legacy-joke-'+(n+1),kind:'joke',title:'Inside joke',text:e.text})),...histories(i.guildId).map((e,n)=>({id:'legacy-history-'+(n+1),kind:'history',title:'Server history',text:e.text}))].filter(e=>(e.title+' '+e.text).toLowerCase().includes(term.toLowerCase()));
+   const entries=[...loreEntries(i.guildId,{term}),...legacy].slice(0,15);
+   return i.reply({content:entries.length?'📖 **LumiVibe Lorebook**\n'+entries.slice(0,15).map(e=>'**'+e.title+'** ['+e.kind+'] ('+e.id+')\n'+e.text).join('\n\n'):'No matching approved lore yet.',flags:MessageFlags.Ephemeral,allowedMentions:safe});
   }
   const owner=i.guild.ownerId===i.user.id;
   if(sub==='review'){
@@ -31,7 +34,13 @@ export async function socialLoreCommand(i){
   }
   if(sub==='remove'){
    const mod=owner;
-   await deleteSocialLore(i.guildId,i.options.getString('id'),i.user.id,mod);
+   const id=i.options.getString('id');
+   const legacy=id.match(/^legacy-(joke|history)-(\\d+)$/);
+   if(legacy){
+    if(!owner)throw Error('Only Lumi can remove legacy lore');
+    if(legacy[1]==='joke')await deleteJoke(i.guildId,Number(legacy[2]));
+    else await deleteHistory(i.guildId,Number(legacy[2]));
+   }else await deleteSocialLore(i.guildId,id,i.user.id,mod);
    return i.reply({content:'Lore entry removed. 💙',flags:MessageFlags.Ephemeral});
   }
   const kind=['bond','joke','moment','history'].includes(sub)?sub:null;
