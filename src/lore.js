@@ -1,0 +1,79 @@
+import { jsonStore } from './json-store.js';
+const store = jsonStore('lore.json');
+let db = {};
+export async function loadLore() {
+  db = await store.load();
+  console.log('LumiVibe lore store ready');
+}
+function state(g) {
+  return db[g] || (db[g] = { jokes: [], moments: [] });
+}
+function save() {
+  return store.save(db);
+}
+export function jokes(g) {
+  return state(g).jokes.slice();
+}
+export function moments(g) {
+  return state(g).moments.slice();
+}
+export async function addJoke(g, text, by) {
+  const s = state(g);
+  if (s.jokes.length >= 60) throw Error('Lore library full (60). Remove an entry first.');
+  s.jokes.push({ text, by, at: Date.now() });
+  await save();
+}
+export async function deleteJoke(g, index) {
+  const s = state(g);
+  if (index < 1 || index > s.jokes.length) throw Error('No joke with that number');
+  s.jokes.splice(index - 1, 1);
+  await save();
+}
+export async function addMoment(g, m) {
+  const s = state(g);
+  if (s.moments.some((x) => x.messageId === m.messageId)) throw Error('That moment is already saved');
+  s.moments.push(m);
+  if (s.moments.length > 60) s.moments.shift();
+  await save();
+}
+export async function deleteMoment(g, index) {
+  const s = state(g);
+  if (index < 1 || index > s.moments.length) throw Error('No moment with that number');
+  s.moments.splice(index - 1, 1);
+  await save();
+}
+
+export async function removeAuthorMoments(g, u) {
+  const s = state(g);
+  const before = s.moments.length;
+  s.moments = s.moments.filter((x) => x.author !== u);
+  if (before !== s.moments.length) await save();
+  return before - s.moments.length;
+}
+export async function removeMessageMoment(g, id) {
+  const s = state(g);
+  const before = s.moments.length;
+  s.moments = s.moments.filter((x) => x.messageId !== id);
+  if (before !== s.moments.length) await save();
+  return before - s.moments.length;
+}
+
+export function histories(g) {
+  return (state(g).histories || []).slice();
+}
+export async function addHistory(g, text, by) {
+  const s = state(g);
+  s.histories ||= [];
+  if (s.histories.length >= 80) throw Error('History library full (80). Remove an entry first.');
+  if (s.histories.some((x) => x.text.toLowerCase() === text.toLowerCase()))
+    throw Error('That lore is already saved');
+  s.histories.push({ text, by, at: Date.now() });
+  await save();
+}
+export async function deleteHistory(g, index) {
+  const s = state(g);
+  s.histories ||= [];
+  if (index < 1 || index > s.histories.length) throw Error('No history entry with that number');
+  s.histories.splice(index - 1, 1);
+  await save();
+}
