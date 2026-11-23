@@ -1,6 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import { isQuotaFailure, retryDelay } from '../src/gemini-quota.js';
 import { lumiVibeCanonContext } from '../src/lumivibe-canon.js';
 
@@ -92,4 +95,22 @@ test('emoji naming produces unique subject-based names', () => {
     'meme_pepe_laughing_2',
   );
   assert.throws(() => uniqueEmojiName('unknown', 'face', new Set(), 'old'));
+});
+
+
+test('social lore requires both members to approve friendship dynamics',async()=>{
+ const dir = await mkdtemp(path.join(tmpdir(), 'lumira-social-lore-'));
+ process.env.LUMIRA_DATA_DIR = dir;
+ const {loadSocialLore,proposeLore,loreEntries,pendingLore,approveLore,deleteSocialLore,socialLoreContext} = await import('../src/social-lore.js');
+ await loadSocialLore();
+ const guild='test-'+Date.now();
+ const {entry,pending}=await proposeLore(guild,{kind:'bond',title:'Gaming duo',text:'They always queue together for games',author:'100',members:['100','200']});
+ assert.equal(pending,true);
+ assert.equal(loreEntries(guild).length,0);
+ assert.equal(pendingLore(guild,'200').length,1);
+ assert.equal(await approveLore(guild,entry.id,'200'),true);
+ assert.equal(loreEntries(guild,{memberId:'100'}).length,1);
+ assert.match(socialLoreContext(guild,'200'),/Gaming duo/);
+ await deleteSocialLore(guild,entry.id,'200');
+ assert.equal(loreEntries(guild).length,0);
 });
