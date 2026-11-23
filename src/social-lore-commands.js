@@ -1,7 +1,30 @@
-import { MessageFlags, PermissionFlagsBits } from 'discord.js';
+import { ActionRowBuilder, ButtonBuilder, ButtonStyle, MessageFlags, PermissionFlagsBits } from 'discord.js';
 import { LUMIVIBE_GUILD_ID } from './channels.js';
 import { loreEntries,proposeLore,pendingLore,approveLore,deleteSocialLore } from './social-lore.js';
 const safe={parse:[]};
+
+function reviewCard(entry){
+ return {content:'📖 **'+({joke:'Inside Joke',bond:'Friendship Dynamic',moment:'Server Moment'}[entry.kind]||'Lore')+' awaiting review**\n**'+entry.title+'**\n'+entry.text+'\n\nSubmitted by <@'+entry.author+'>',
+ components:[new ActionRowBuilder().addComponents(
+  new ButtonBuilder().setCustomId('lumira:lore:approve:'+entry.id).setLabel('Approve').setStyle(ButtonStyle.Success),
+  new ButtonBuilder().setCustomId('lumira:lore:dismiss:'+entry.id).setLabel('Dismiss').setStyle(ButtonStyle.Danger))],
+ allowedMentions:safe};
+}
+export async function socialLoreButton(i){
+ if(!i.inGuild()||i.guildId!==LUMIVIBE_GUILD_ID)return i.reply({content:'LumiVibe only.',flags:MessageFlags.Ephemeral});
+ const [, ,action,id]=i.customId.split(':');
+ if(!['approve','dismiss'].includes(action)||!id)return i.reply({content:'Invalid lore review.',flags:MessageFlags.Ephemeral});
+ try{
+  const entry=pendingLore(i.guildId,i.user.id).find(e=>e.id===id);
+  if(!entry)return i.reply({content:'This review is no longer pending for you.',flags:MessageFlags.Ephemeral});
+  if(action==='approve'){
+   const published=await approveLore(i.guildId,id,i.user.id);
+   return i.update({content:published?'✅ Approved and added to the lorebook: '+entry.title:'✅ Your approval was recorded: '+entry.title,components:[],allowedMentions:safe});
+  }
+  await deleteSocialLore(i.guildId,id,i.user.id);
+  return i.update({content:'❌ Dismissed: '+entry.title,components:[],allowedMentions:safe});
+ }catch(error){return i.reply({content:error.message,flags:MessageFlags.Ephemeral})}
+}
 export async function socialLoreCommand(i){
  if(!i.inGuild()||i.guildId!==LUMIVIBE_GUILD_ID)return i.reply({content:'LumiVibe only.',flags:MessageFlags.Ephemeral});
  const sub=i.options.getSubcommand();
@@ -12,7 +35,11 @@ export async function socialLoreCommand(i){
   }
   if(sub==='pending'){
    const entries=pendingLore(i.guildId,i.user.id);
-   return i.reply({content:entries.length?entries.map(e=>e.id+' — '+e.title+' ('+e.kind+')').join('\n'):'No entries awaiting your approval.',flags:MessageFlags.Ephemeral,allowedMentions:safe});
+   if(!entries.length)return i.reply({content:'No entries awaiting your approval. 💙',flags:MessageFlags.Ephemeral});
+   await i.reply({content:'📬 **Pending lore reviews** ('+entries.length+')\nEach submission has its own buttons below.',flags:MessageFlags.Ephemeral});
+   for(const entry of entries.slice(0,10))await i.followUp({...reviewCard(entry),flags:MessageFlags.Ephemeral});
+   if(entries.length>10)await i.followUp({content:'Showing 10 reviews. Run /lumira-lorebook pending again after reviewing.',flags:MessageFlags.Ephemeral});
+   return;
   }
   if(sub==='approve'){
    const published=await approveLore(i.guildId,i.options.getString('id'),i.user.id);
