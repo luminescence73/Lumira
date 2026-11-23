@@ -16,6 +16,7 @@ import {
 } from './admin.js';
 import { LUMIVIBE_GUILD_ID } from './channels.js';
 import { commandDefinitions } from './command-schema.js';
+import { publishMemberCommands } from './member-command-directory.js';
 import { publishCuratedCards } from './curated-cards.js';
 import { organizeVisualEmojis } from './emoji-visual.js';
 import { populateMemberProfiles } from './profiles.js';
@@ -57,6 +58,7 @@ async function prepareGuild(guild) {
   }
 
   await memberSync;
+  await runJob('member command directory', () => publishMemberCommands(guild));
   await runJob('curated cards', () => publishCuratedCards(guild));
   await runJob('automatic member cards', () => populateMemberProfiles(guild, roster(guild.id)));
 }
