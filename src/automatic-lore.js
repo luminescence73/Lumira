@@ -19,44 +19,6 @@ export function installAutomaticLore(client) {
     if (/[?!]{3,}/.test(t)) return null;
     return t;
   }
-  client.on(Events.MessageCreate, async (message) => {
-    if (
-      !message.inGuild() ||
-      message.author.bot ||
-      message.webhookId ||
-      !publicSocialChannel(message.channel) ||
-      !settings(message.guildId).autoLore ||
-      memberMuted(message.guildId, message.author.id)
-    )
-      return;
-    const phrase = safeSharedPhrase(message.content || '');
-    if (!phrase) return;
-    const key = message.guildId + ':' + phrase.toLowerCase();
-    const now = Date.now();
-    if (phraseSignals.size > 1500) {
-      for (const [k, v] of phraseSignals) {
-        if (now - v.last > 7 * 86400000) phraseSignals.delete(k);
-      }
-    }
-    const s = phraseSignals.get(key) || { authors: new Set(), last: now };
-    if (now - s.last > 7 * 86400000) s.authors.clear();
-    for (const id of s.authors) if (memberMuted(message.guildId, id)) s.authors.delete(id);
-    s.authors.add(message.author.id);
-    s.last = now;
-    phraseSignals.delete(key);
-    if (phraseSignals.size >= 1500) phraseSignals.delete(phraseSignals.keys().next().value);
-    phraseSignals.set(key, s);
-    if (s.authors.size < 3 || jokes(message.guildId).some((x) => x.text.toLowerCase() === phrase.toLowerCase()))
-      return;
-    phraseSignals.delete(key);
-    try {
-      await addJoke(message.guildId, phrase, 'auto');
-      bump(message.guildId, 'lore');
-      console.log('Learned repeated public inside-joke candidate');
-    } catch (e) {
-      console.error('Auto lore skipped:', e.message);
-    }
-  });
   client.on(Events.MessageReactionAdd, async (reaction, user) => {
     if (user.bot) return;
     try {

@@ -42,52 +42,6 @@ export function commandDefinitions() {
       s.setName('disable').setDescription('Opt out and permanently delete all your saved memories'),
     )
     .toJSON();
-  const loreCommand = new SlashCommandBuilder()
-    .setName('lumira-lore')
-    .setDescription('Browse server inside jokes; moderators manage entries')
-    .addSubcommand((s) => s.setName('list').setDescription('View saved inside jokes'))
-    .addSubcommand((s) =>
-      s
-        .setName('add')
-        .setDescription('Moderator: approve an inside joke')
-        .addStringOption((o) =>
-          o.setName('joke').setDescription('Shared joke or reference').setRequired(true).setMaxLength(240),
-        ),
-    )
-    .addSubcommand((s) =>
-      s
-        .setName('remove')
-        .setDescription('Moderator: remove an inside joke')
-        .addIntegerOption((o) =>
-          o.setName('number').setDescription('Entry number').setRequired(true).setMinValue(1),
-        ),
-    )
-    .toJSON();
-  const historyCommand = new SlashCommandBuilder()
-    .setName('lumira-history')
-    .setDescription('Owner and moderators: manage LumiVibe history and lore')
-    .addSubcommand((s) =>
-      s
-        .setName('add')
-        .setDescription('Save an approved piece of server history')
-        .addStringOption((o) =>
-          o
-            .setName('story')
-            .setDescription('History, event, or lore (max 1500 characters)')
-            .setRequired(true)
-            .setMaxLength(1500),
-        ),
-    )
-    .addSubcommand((s) => s.setName('list').setDescription('Read saved server history'))
-    .addSubcommand((s) =>
-      s
-        .setName('remove')
-        .setDescription('Remove a history entry')
-        .addIntegerOption((o) =>
-          o.setName('number').setDescription('Entry number').setRequired(true).setMinValue(1),
-        ),
-    )
-    .toJSON();
   const profileCommand = new SlashCommandBuilder()
     .setName('lumira-profile')
     .setDescription('Create or manage your own card in #cards')
@@ -455,6 +409,9 @@ export function commandDefinitions() {
       return s;
     });
   }
+  socialLoreCommand.addSubcommand(s=>s.setName('history').setDescription('Submit server history for Lumi approval').addStringOption(o=>o.setName('title').setDescription('Short title').setRequired(true)).addStringOption(o=>o.setName('description').setDescription('History').setRequired(true)));
+  socialLoreCommand.addSubcommand(s=>s.setName('review').setDescription('Lumi: review all pending lore'));
+  socialLoreCommand.addSubcommand(s=>s.setName('reject').setDescription('Lumi: reject pending lore').addStringOption(o=>o.setName('id').setDescription('Entry ID').setRequired(true)));
   socialLoreCommand.addSubcommand(s=>s.setName('browse').setDescription('Browse approved lore'));
   socialLoreCommand.addSubcommand(s=>s.setName('search').setDescription('Search approved lore').addStringOption(o=>o.setName('query').setDescription('Search phrase').setRequired(true)));
   socialLoreCommand.addSubcommand(s=>s.setName('pending').setDescription('View proposals awaiting your approval'));
@@ -465,8 +422,6 @@ export function commandDefinitions() {
     chatCommand,
     forgetCommand,
     memoryCommand,
-    loreCommand,
-    historyCommand,
     profileCommand,
     scrapbookCommand,
     egoCommand,
