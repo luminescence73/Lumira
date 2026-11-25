@@ -31,8 +31,30 @@ export async function runDiagnostics(client) {
   const log = privateChannel('bot-logs');
   const canSend = ch => !!ch && !!bot && bot.permissionsIn(ch).has([PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages]);
   await check('Private log channel writable', () => canSend(log));
-  const testChannel = privateChannel('lumira-test');
-  results.push({ name: 'Private test channel', status: canSend(testChannel) ? 'PASS' : 'NOT_CONFIGURED' });
+  let testChannel = privateChannel('lumira-test');
+  await check('Private test channel', async () => {
+    if (!guild || !channels || !bot) return false;
+    if (!testChannel) {
+      if (channels.some(c => c?.name === 'lumira-test')) return false;
+      testChannel = await guild.channels.create({
+        name: 'lumira-test', type: ChannelType.GuildText,
+        permissionOverwrites: [
+          { id: guild.roles.everyone.id, deny: [PermissionFlagsBits.ViewChannel] },
+          { id: bot.id, allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory, PermissionFlagsBits.ManageMessages] }
+        ],
+        reason: 'Private automated Lumira regression testing'
+      });
+    }
+    return testChannel.permissionsFor(guild.roles.everyone)?.has(PermissionFlagsBits.ViewChannel) === false && canSend(testChannel);
+  });
+  await check('Live message round trip', async () => {
+    if (!canSend(testChannel) || testChannel.permissionsFor(guild.roles.everyone)?.has(PermissionFlagsBits.ViewChannel) !== false) return false;
+    const probe = await testChannel.send({content:'Lumira automated diagnostic probe',allowedMentions:{parse:[]}});
+    try {
+      const fetched = await testChannel.messages.fetch({message:probe.id,force:true});
+      return fetched.content === 'Lumira automated diagnostic probe';
+    } finally { await probe.delete(); }
+  });
   results.push({ name: 'Live member interactions', status: 'NOT_TESTED' });
   const report = 'Lumira diagnostics\n' + results.map(r => r.status + ' | ' + r.name).join('\n');
   console.log(report);
