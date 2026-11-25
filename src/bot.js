@@ -1,3 +1,4 @@
+import { installDiagnostics } from './diagnostics.js';
 import { commandDefinitions } from './command-schema.js';
 import { loadSocialLore } from './social-lore.js';
 import { Client, Events, GatewayIntentBits, Partials } from 'discord.js';
@@ -43,6 +44,7 @@ export function createClient({ memberEvents = process.env.LUMIRA_MEMBERS_INTENT 
 
 export function installBot(client, { scheduleInterval = interval, scheduleTimeout = timeout } = {}) {
   installOperations(client, scheduleInterval);
+  installDiagnostics(client, scheduleInterval);
   installReadyJobs(client, scheduleInterval, scheduleTimeout);
   installAutomaticLore(client);
   client.on(Events.InteractionCreate, handleInteraction);
