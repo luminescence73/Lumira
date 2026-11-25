@@ -1,8 +1,11 @@
 name: Validate Lumira
 on:
   push:
-    branches: [refactor/full-code-cleanup]
+    branches: [main, refactor/full-code-cleanup]
   pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
 jobs:
   check:
     runs-on: ubuntu-latest
