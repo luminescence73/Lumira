@@ -1,3 +1,4 @@
+import { GatewayIntentBits } from 'discord.js';
 import { jsonStore } from './json-store.js';
 const store = jsonStore('member-roster.json');
 let db = {};
@@ -11,13 +12,14 @@ function save() {
 export async function syncRoster(guild) {
   const found = new Map();
   let complete = false;
+  const enabled = guild.client?.options?.intents?.has(GatewayIntentBits.GuildMembers) ?? (process.env.LUMIRA_MEMBERS_INTENT === 'true');
   try {
     const members =
-      process.env.LUMIRA_MEMBERS_INTENT === 'true'
+      enabled
         ? await guild.members.fetch({ limit: 0, withPresences: false })
         : guild.members.cache;
     for (const m of members.values()) if (!m.user.bot) found.set(m.id, m);
-    complete = process.env.LUMIRA_MEMBERS_INTENT === 'true';
+    complete = enabled && members.size >= guild.memberCount;
   } catch (e) {
     console.warn(
       'Full roster fetch unavailable; enable Server Members Intent in Discord Developer Portal and set LUMIRA_MEMBERS_INTENT=true:',
