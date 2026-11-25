@@ -98,12 +98,12 @@ test('startup loads persisted state, logs into the injected gateway and register
   );
   await waitTurn();
   assert.equal(connected, 'test-only');
-  assert.equal(client.listenerCount(Events.MessageCreate), 2);
+  assert.equal(client.listenerCount(Events.MessageCreate), 1);
   assert.equal(client.listenerCount(Events.MessageReactionAdd), 1);
   assert.equal(client.listenerCount(Events.InteractionCreate), 1);
   assert.deepEqual(
     timers.map(([, delay]) => delay),
-    [600_000, 60_000],
+    [600_000, 86_400_000, 60_000],
   );
   assert.deepEqual(commands.map((command) => command.name).sort(), [...commandNames].sort());
   assert.equal(commandDefinitions().length, commandNames.length);
@@ -115,12 +115,12 @@ test('startup loads persisted state, logs into the injected gateway and register
 });
 
 test('history is reachable and member attempts to edit it are denied', async () => {
-  const view = interaction('lumira-history', 'list', { guildId: LUMIVIBE_GUILD_ID });
+  const view = interaction('lumira-lorebook', 'browse', { guildId: LUMIVIBE_GUILD_ID });
   await handleInteraction(view);
-  assert.match(view.calls[0][1].content, /No .*history/i);
-  const denied = interaction('lumira-history', 'add', { guildId: LUMIVIBE_GUILD_ID });
+  assert.match(view.calls[0][1].content, /No matching approved lore/i);
+  const denied = interaction('lumira-lorebook', 'review', { guildId: LUMIVIBE_GUILD_ID });
   await handleInteraction(denied);
-  assert.match(denied.calls[0][1].content, /owner or moderator/i);
+  assert.match(denied.calls[0][1].content, /Only Lumi/i);
   assert.equal(denied.calls[0][1].flags, MessageFlags.Ephemeral);
 });
 
