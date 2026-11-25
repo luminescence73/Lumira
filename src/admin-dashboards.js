@@ -1,3 +1,4 @@
+import { GatewayIntentBits } from 'discord.js';
 import { ChannelType, EmbedBuilder, PermissionFlagsBits } from 'discord.js';
 import { save, state } from './admin-state.js';
 import { norm } from './admin-layout.js';
@@ -148,7 +149,7 @@ export async function authorizeGracieStickerImportOnce(guild) {
   if (s.gracieStickerAuthorizationVersion === 1) return { alreadyDone: true };
   // Match the member's Discord identity, not arbitrary references in channel names.
   const members =
-    process.env.LUMIRA_MEMBERS_INTENT === 'true'
+    (guild.client?.options?.intents?.has(GatewayIntentBits.GuildMembers) ?? (process.env.LUMIRA_MEMBERS_INTENT === 'true'))
       ? await guild.members.fetch({ limit: 0 }).catch(() => guild.members.cache)
       : guild.members.cache;
   const matches = [...members.values()].filter(
@@ -166,6 +167,7 @@ export async function authorizeGracieStickerImportOnce(guild) {
   s.stickerManagers = [...new Set([...(s.stickerManagers || []), id])];
   s.gracieStickerAuthorizationVersion = 1;
   await save();
+  console.log('Gracie sticker access verified:', s.stickerManagers.includes(id));
   return { assigned: true, memberId: id };
 }
 export async function refreshStickerDirectory(guild) {
