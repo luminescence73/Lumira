@@ -108,7 +108,9 @@ test('social lore requires both members to approve friendship dynamics',async()=
  assert.equal(pending,true);
  assert.equal(loreEntries(guild).length,0);
  assert.equal(pendingLore(guild,'200').length,1);
- assert.equal(await approveLore(guild,entry.id,'200'),true);
+ assert.equal(await approveLore(guild,entry.id,'200'),false);
+ assert.equal(loreEntries(guild).length,0);
+ assert.equal(await approveLore(guild,entry.id,'owner',true),true);
  assert.equal(loreEntries(guild,{memberId:'100'}).length,1);
  assert.match(socialLoreContext(guild,'200'),/Gaming duo/);
  await deleteSocialLore(guild,entry.id,'200');
