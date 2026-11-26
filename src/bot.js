@@ -1,3 +1,4 @@
+import { createHolidayDelivery } from './holidays.js';
 import { installDiagnostics } from './diagnostics.js';
 import { commandDefinitions } from './command-schema.js';
 import { loadSocialLore } from './social-lore.js';
@@ -67,7 +68,8 @@ export function installBot(client, { scheduleInterval = interval, scheduleTimeou
     }
   });
   const deliver = createReminderDelivery(client, { channelAllowed, publicSocialChannel });
-  client.once(Events.ClientReady, () => scheduleInterval(deliver, 60_000));
+  const celebrate = createHolidayDelivery(client);
+  client.once(Events.ClientReady, () => scheduleInterval(async () => { await Promise.all([deliver(), celebrate()]); }, 60_000));
 }
 
 export async function startBot({ token, client, scheduleInterval, scheduleTimeout } = {}) {
